@@ -362,6 +362,569 @@ class Database:
         self.conn.commit()
 
 class LibraryApp:
+    
+    def show_return_confirm(self, count, total_fine):
+        result = {"confirmed": False}
+
+        popup = tk.Toplevel(self.root)
+        popup.title("Xác nhận trả sách")
+        popup.configure(bg="white")
+        popup.resizable(False, False)
+        popup.transient(self.root)
+        popup.grab_set()
+
+        width, height = 440, 310
+        self.root.update_idletasks()
+        x = self.root.winfo_rootx() + (
+            self.root.winfo_width() - width
+        ) // 2
+        y = self.root.winfo_rooty() + (
+            self.root.winfo_height() - height
+        ) // 2
+        popup.geometry("{}x{}+{}+{}".format(width, height, x, y))
+
+        tk.Label(
+            popup, text="?",
+            font=("Segoe UI", 25, "bold"),
+            fg="#D97706", bg="#FEF3C7",
+            width=3, height=1
+        ).pack(pady=(20, 10))
+
+        tk.Label(
+            popup, text="Xác nhận trả sách?",
+            font=("Segoe UI", 16, "bold"),
+            fg="#1E293B", bg="white"
+        ).pack(pady=(0, 8))
+
+        tk.Label(
+            popup,
+            text="Bạn có chắc muốn trả các sách đã chọn không?",
+            font=("Segoe UI", 10),
+            fg="#64748B", bg="white"
+        ).pack(pady=(0, 15))
+
+        info = tk.Frame(popup, bg="#F8FAFC")
+        info.pack(fill="x", padx=28, pady=(0, 18))
+
+        tk.Label(
+            info, text="Số phiếu sẽ trả",
+            font=("Segoe UI", 10),
+            fg="#475569", bg="#F8FAFC"
+        ).grid(row=0, column=0, sticky="w", padx=14, pady=10)
+
+        tk.Label(
+            info, text=str(count),
+            font=("Segoe UI", 10, "bold"),
+            fg="#0F172A", bg="#F8FAFC"
+        ).grid(row=0, column=1, sticky="e", padx=14, pady=10)
+
+        tk.Label(
+            info, text="Tổng tiền phạt",
+            font=("Segoe UI", 10),
+            fg="#475569", bg="#F8FAFC"
+        ).grid(row=1, column=0, sticky="w", padx=14, pady=(0, 10))
+
+        tk.Label(
+            info, text="{:,} VNĐ".format(total_fine),
+            font=("Segoe UI", 10, "bold"),
+            fg="#DC2626", bg="#F8FAFC"
+        ).grid(row=1, column=1, sticky="e", padx=14, pady=(0, 10))
+
+        info.grid_columnconfigure(0, weight=1)
+        info.grid_columnconfigure(1, weight=1)
+
+        buttons = tk.Frame(popup, bg="white")
+        buttons.pack(fill="x", padx=28)
+
+        def cancel():
+            popup.destroy()
+
+        def confirm():
+            result["confirmed"] = True
+            popup.destroy()
+
+        tk.Button(
+            buttons, text="Hủy",
+            font=("Segoe UI", 10),
+            bg="#F1F5F9", fg="#334155",
+            relief="flat", cursor="hand2",
+            command=cancel, width=13, pady=9
+        ).pack(side="left", expand=True, fill="x", padx=(0, 8))
+
+        tk.Button(
+            buttons, text="Xác nhận trả",
+            font=("Segoe UI", 10, "bold"),
+            bg="#16A34A", fg="white",
+            activebackground="#15803D",
+            relief="flat", cursor="hand2",
+            command=confirm, width=16, pady=9
+        ).pack(side="left", expand=True, fill="x", padx=(8, 0))
+
+        popup.protocol("WM_DELETE_WINDOW", cancel)
+        self.root.wait_window(popup)
+        return result["confirmed"]
+
+    def show_return_success(self, title, message):
+        popup = tk.Toplevel(self.root)
+        popup.title(title)
+        popup.configure(bg="white")
+        popup.resizable(False, False)
+        popup.transient(self.root)
+        popup.grab_set()
+
+        width, height = 440, 300
+        self.root.update_idletasks()
+
+        x = self.root.winfo_rootx() + (
+            self.root.winfo_width() - width
+        ) // 2
+        y = self.root.winfo_rooty() + (
+            self.root.winfo_height() - height
+        ) // 2
+
+        popup.geometry(
+            "{}x{}+{}+{}".format(width, height, x, y)
+        )
+
+        # Vẽ biểu tượng dấu tích xanh
+        canvas = tk.Canvas(
+            popup,
+            width=76,
+            height=76,
+            bg="white",
+            highlightthickness=0
+        )
+        canvas.pack(pady=(22, 8))
+
+        canvas.create_oval(
+            8, 8, 68, 68,
+            fill="#DCFCE7",
+            outline="#16A34A",
+            width=2
+        )
+        canvas.create_line(
+            24, 39, 34, 49, 52, 29,
+            fill="#15803D",
+            width=4,
+            capstyle="round",
+            joinstyle="round"
+        )
+
+        tk.Label(
+            popup,
+            text=title,
+            font=("Segoe UI", 17, "bold"),
+            fg="#166534",
+            bg="white"
+        ).pack(pady=(0, 8))
+
+        tk.Label(
+            popup,
+            text=message,
+            font=("Segoe UI", 10),
+            fg="#475569",
+            bg="white",
+            justify="center",
+            wraplength=380
+        ).pack(padx=25, pady=(0, 18))
+
+        tk.Button(
+            popup,
+            text="Hoàn tất",
+            font=("Segoe UI", 10, "bold"),
+            bg="#16A34A",
+            fg="white",
+            activebackground="#15803D",
+            activeforeground="white",
+            relief="flat",
+            cursor="hand2",
+            width=18,
+            pady=9,
+            command=popup.destroy
+        ).pack()
+
+        popup.bind("<Return>", lambda event: popup.destroy())
+        popup.bind("<Escape>", lambda event: popup.destroy())
+
+    def show_borrow_success(self, borrow_id, reader_name, book_name,
+                            borrow_date, due_date):
+        import tkinter as tk
+
+        popup = tk.Toplevel(self.root)
+        popup.title("Mượn sách thành công")
+        popup.transient(self.root)
+        popup.resizable(False, False)
+        popup.configure(bg="#FFFFFF")
+
+        width, height = 440, 460
+        self.root.update_idletasks()
+
+        x = self.root.winfo_rootx() + (
+            self.root.winfo_width() - width
+        ) // 2
+        y = self.root.winfo_rooty() + (
+            self.root.winfo_height() - height
+        ) // 2
+
+        popup.geometry(f"{width}x{height}+{x}+{y}")
+
+        body = tk.Frame(
+            popup,
+            bg="#FFFFFF",
+            padx=30,
+            pady=24
+        )
+        body.pack(fill="both", expand=True)
+
+        icon = tk.Canvas(
+            body,
+            width=86,
+            height=86,
+            bg="#FFFFFF",
+            highlightthickness=0
+        )
+        icon.pack(pady=(0, 12))
+
+        icon.create_oval(
+            5, 5, 81, 81,
+            fill="#DCFCE7",
+            outline="#DCFCE7"
+        )
+
+        icon.create_line(
+            25, 44, 37, 56, 62, 30,
+            fill="#16A34A",
+            width=5,
+            capstyle="round",
+            joinstyle="round"
+        )
+
+        tk.Label(
+            body,
+            text="Mượn sách thành công!",
+            font=("Segoe UI", 18, "bold"),
+            fg="#166534",
+            bg="#FFFFFF"
+        ).pack()
+
+        tk.Label(
+            body,
+            text="Phiếu mượn đã được lưu vào hệ thống.",
+            font=("Segoe UI", 10),
+            fg="#6B7280",
+            bg="#FFFFFF"
+        ).pack(pady=(7, 20))
+
+        details = tk.Frame(
+            body,
+            bg="#F8FAFC",
+            highlightbackground="#E5E7EB",
+            highlightthickness=1
+        )
+        details.pack(fill="x")
+
+        rows = [
+            ("Mã phiếu", str(borrow_id)),
+            ("Độc giả", str(reader_name)),
+            ("Tên sách", str(book_name)),
+            ("Ngày mượn", str(borrow_date)),
+            ("Hạn trả", str(due_date)),
+        ]
+
+        for label, value in rows:
+            row = tk.Frame(details, bg="#F8FAFC")
+            row.pack(fill="x", padx=14, pady=7)
+
+            tk.Label(
+                row,
+                text=label,
+                font=("Segoe UI", 10),
+                fg="#6B7280",
+                bg="#F8FAFC",
+                anchor="w"
+            ).pack(side="left")
+
+            tk.Label(
+                row,
+                text=value,
+                font=("Segoe UI", 10, "bold"),
+                fg="#111827",
+                bg="#F8FAFC",
+                anchor="e",
+                justify="right",
+                wraplength=235
+            ).pack(side="right")
+
+        tk.Button(
+            body,
+            text="Hoàn tất",
+            command=popup.destroy,
+            font=("Segoe UI", 11, "bold"),
+            fg="#FFFFFF",
+            bg="#16A34A",
+            activebackground="#15803D",
+            activeforeground="#FFFFFF",
+            relief="flat",
+            bd=0,
+            cursor="hand2",
+            height=2
+        ).pack(fill="x", pady=(20, 0))
+
+        popup.grab_set()
+        popup.focus_force()
+        popup.bind(
+            "<Return>",
+            lambda event: popup.destroy()
+        )
+        popup.bind(
+            "<Escape>",
+            lambda event: popup.destroy()
+        )
+
+
+    def load_overdue_tab(self):
+        # Xóa dữ liệu cũ nếu bảng đã có dữ liệu
+        for item in self.tlate.get_children():
+            self.tlate.delete(item)
+
+        c = self.db.conn.cursor()
+        c.execute("""
+            SELECT b.id, r.name, r.phone, bo.title, b.due_date
+            FROM borrowings b
+            JOIN readers r ON r.id = b.reader_id
+            JOIN books bo ON bo.id = b.book_id
+            WHERE b.status = 'Borrowing'
+            ORDER BY b.due_date
+        """)
+
+        today = datetime.now().date()
+
+        for bid, reader, phone, book, due_text in c.fetchall():
+            due_date = datetime.strptime(due_text, "%Y-%m-%d").date()
+            late_days = (today - due_date).days
+
+            # Chỉ hiển thị phiếu đang mượn đã quá hạn
+            if late_days > 0:
+                fine = late_days * FINE_PER_DAY
+                self.tlate.insert(
+                    "", "end",
+                    values=("☐", bid, reader, phone, book,
+                        self.fd(due_text), "{} ngày".format(late_days),
+                        "{:,} VNĐ".format(fine))
+                )
+
+    def confirm_on_time_returns(self):
+        c = self.db.conn.cursor()
+
+        c.execute("""
+            SELECT id, book_id, due_date, request_date
+            FROM borrowings
+            WHERE status = 'PendingReturn'
+        """)
+        rows = c.fetchall()
+
+        today = datetime.now().date()
+        valid_rows = []
+
+        for bid, book_id, due, req in rows:
+            if not due or not req:
+                continue
+
+            try:
+                due_date = datetime.strptime(
+                    due, "%Y-%m-%d"
+                ).date()
+                request_date = datetime.strptime(
+                    req, "%Y-%m-%d"
+                ).date()
+            except (ValueError, TypeError):
+                continue
+
+            if request_date <= due_date:
+                valid_rows.append(
+                    (bid, book_id, request_date)
+                )
+
+        if not valid_rows:
+            messagebox.showinfo(
+                "Duyệt phiếu",
+                "Không có phiếu chờ xác nhận nào trả đúng hạn."
+            )
+            return
+
+        if not messagebox.askyesno(
+            "Xác nhận",
+            "Duyệt {} phiếu trả sách đúng hạn?".format(
+                len(valid_rows)
+            )
+        ):
+            return
+
+        try:
+            approved = 0
+
+            for bid, book_id, request_date in valid_rows:
+                c.execute("""
+                    UPDATE borrowings
+                    SET status = 'Returned',
+                        return_date = ?,
+                        fine = 0
+                    WHERE id = ?
+                      AND status = 'PendingReturn'
+                """, (request_date.isoformat(), bid))
+
+                if c.rowcount > 0:
+                    c.execute("""
+                        UPDATE books
+                        SET available = available + 1
+                        WHERE id = ?
+                    """, (book_id,))
+                    approved += 1
+
+            self.db.conn.commit()
+
+        except Exception as e:
+            self.db.conn.rollback()
+            messagebox.showerror(
+                "Lỗi",
+                "Không thể duyệt phiếu:\n{}".format(e)
+            )
+            return
+
+        self.checked_rows["pending"].clear()
+        self.pending_checked.clear()
+        self.load_pending()
+        self.load_returns()
+        self.load_overdue_tab()
+
+        messagebox.showinfo(
+            "Thành công",
+            "Đã duyệt {} phiếu trả sách đúng hạn.".format(
+                approved
+            )
+        )
+
+    def confirm_selected_returns(self):
+        selected_rows = list(
+            self.checked_rows.get("pending", set())
+        )
+
+        selected_ids = []
+
+        for row_id in selected_rows:
+            if not self.tpend.exists(row_id):
+                continue
+
+            values = self.tpend.item(row_id, "values")
+
+            if len(values) > 1:
+                try:
+                    selected_ids.append(int(values[1]))
+                except (ValueError, TypeError):
+                    continue
+
+        if not selected_ids:
+            messagebox.showwarning(
+                "Duyệt phiếu",
+                "Hãy tích ô Chọn ở ít nhất một phiếu cần duyệt."
+            )
+            return
+
+        c = self.db.conn.cursor()
+        records = []
+
+        for bid in selected_ids:
+            c.execute("""
+                SELECT book_id, due_date, request_date
+                FROM borrowings
+                WHERE id = ?
+                  AND status = 'PendingReturn'
+            """, (bid,))
+            result = c.fetchone()
+
+            if result:
+                records.append((bid, result[0], result[1], result[2]))
+
+        if not records:
+            messagebox.showwarning(
+                "Duyệt phiếu",
+                "Các phiếu đã chọn không còn ở trạng thái chờ xác nhận."
+            )
+            return
+
+        if not messagebox.askyesno(
+            "Xác nhận",
+            "Duyệt {} phiếu đã chọn?".format(len(records))
+        ):
+            return
+
+        try:
+            approved = 0
+
+            for bid, book_id, due, req in records:
+                ref_date = datetime.now().date()
+
+                if req:
+                    try:
+                        ref_date = datetime.strptime(
+                            req, "%Y-%m-%d"
+                        ).date()
+                    except (ValueError, TypeError):
+                        pass
+
+                late = 0
+
+                if due:
+                    try:
+                        due_date = datetime.strptime(
+                            due, "%Y-%m-%d"
+                        ).date()
+                        late = max((ref_date - due_date).days, 0)
+                    except (ValueError, TypeError):
+                        pass
+
+                fine = late * FINE_PER_DAY
+
+                c.execute("""
+                    UPDATE borrowings
+                    SET status = 'Returned',
+                        return_date = ?,
+                        fine = ?
+                    WHERE id = ?
+                      AND status = 'PendingReturn'
+                """, (ref_date.isoformat(), fine, bid))
+
+                if c.rowcount > 0:
+                    c.execute("""
+                        UPDATE books
+                        SET available = available + 1
+                        WHERE id = ?
+                    """, (book_id,))
+                    approved += 1
+
+            self.db.conn.commit()
+
+        except Exception as e:
+            self.db.conn.rollback()
+            messagebox.showerror(
+                "Lỗi",
+                "Không thể duyệt phiếu:\n{}".format(e)
+            )
+            return
+
+        self.checked_rows["pending"].clear()
+        self.pending_checked.clear()
+        self.load_pending()
+        self.load_returns()
+        self.load_overdue_tab()
+
+        self.show_return_success(
+            "Duyệt trả sách thành công!",
+            "Đã xác nhận trả thành công {} phiếu.".format(
+                approved
+            )
+        )
+
     def __init__(self, root):
         self.root = root
         self.root.title("Hệ Thống Quản Lý Thư Viện")
@@ -2761,22 +3324,231 @@ class LibraryApp:
 
     # ---------------- BORROW ----------------
     def borrow(self):
-        self.title("Mượn sách","Tạo phiếu mượn và tự động cập nhật kho.")
-        f=tk.Frame(self.content,bg="white"); f.pack(fill="x",padx=28,pady=10)
-        self.borrow_r=tk.StringVar(); self.borrow_b=tk.StringVar()
-        tk.Label(f,text="Đọc giả",bg="white",font=("Segoe UI",10,"bold")).grid(row=0,column=0,padx=20,pady=12)
-        if self.role=="User":      # User chi muon cho chinh minh -> khong cho chon doc gia
-            self.rc=None
-            tk.Label(f,text=self.user+" (tài khoản của bạn)",bg="white",fg=self.C["dark"],
-                     font=("Segoe UI",10)).grid(row=0,column=1,sticky="w",pady=12)
+        self.title("Mượn sách", "Tạo phiếu mượn và tự động cập nhật kho.")
+
+        C = self.C
+        bg = C["bg"]
+        green = C["green"]
+        dark = C["dark"]
+        muted = C["muted"]
+        border = C["border"]
+
+        # Khung chứa toàn bộ giao diện
+        page = tk.Frame(self.content, bg=bg)
+        page.pack(fill="both", expand=True, padx=28, pady=(12, 24))
+
+        # Thẻ giới thiệu
+        hero = tk.Frame(
+            page, bg="#E8F6EF",
+            highlightthickness=1,
+            highlightbackground="#D4EADF"
+        )
+        hero.pack(fill="x", pady=(0, 18))
+
+        hero_inner = tk.Frame(hero, bg="#E8F6EF")
+        hero_inner.pack(fill="x", padx=26, pady=22)
+
+        icon = tk.Label(
+            hero_inner, text="📚",
+            font=("Segoe UI Emoji", 25),
+            bg="#D2EFE0", fg=green,
+            width=3, height=1
+        )
+        icon.pack(side="left", padx=(0, 18), ipady=8)
+
+        heading = tk.Frame(hero_inner, bg="#E8F6EF")
+        heading.pack(side="left", fill="x", expand=True)
+
+        tk.Label(
+            heading, text="Tạo phiếu mượn sách",
+            font=("Segoe UI", 19, "bold"),
+            bg="#E8F6EF", fg="#176747"
+        ).pack(anchor="w")
+
+        tk.Label(
+            heading,
+            text="Điền thông tin bên dưới để tạo phiếu mượn mới.",
+            font=("Segoe UI", 10),
+            bg="#E8F6EF", fg="#648477"
+        ).pack(anchor="w", pady=(5, 0))
+
+        # Thẻ nhập thông tin
+        card = tk.Frame(
+            page, bg="white",
+            highlightthickness=1,
+            highlightbackground="#E0E8E5"
+        )
+        card.pack(fill="x")
+
+        tk.Label(
+            card, text="THÔNG TIN MƯỢN SÁCH",
+            font=("Segoe UI", 10, "bold"),
+            bg="white", fg=green
+        ).pack(anchor="w", padx=28, pady=(24, 4))
+
+        tk.Label(
+            card,
+            text="Vui lòng kiểm tra độc giả và số lượng sách trước khi xác nhận.",
+            font=("Segoe UI", 9),
+            bg="white", fg=muted
+        ).pack(anchor="w", padx=28, pady=(0, 20))
+
+        # Nội dung form
+        form = tk.Frame(card, bg="white")
+        form.pack(fill="x", padx=28, pady=(0, 8))
+
+        form.grid_columnconfigure(0, minsize=155)
+        form.grid_columnconfigure(1, weight=1)
+
+        self.borrow_r = tk.StringVar()
+        self.borrow_b = tk.StringVar()
+
+        # Kiểu ô chọn dùng riêng cho màn hình mượn sách
+        style = ttk.Style()
+        style.configure(
+            "Borrow.TCombobox",
+            font=("Segoe UI", 11),
+            padding=(10, 9),
+            foreground=dark,
+            fieldbackground="#FFFFFF",
+            background="#FFFFFF",
+            arrowcolor=green
+        )
+        style.map(
+            "Borrow.TCombobox",
+            fieldbackground=[("readonly", "#FFFFFF")],
+            selectbackground=[("readonly", "#FFFFFF")],
+            selectforeground=[("readonly", dark)]
+        )
+
+        def add_label(row, text, hint):
+            block = tk.Frame(form, bg="white")
+            block.grid(
+                row=row, column=0,
+                sticky="nw", padx=(0, 18), pady=12
+            )
+
+            tk.Label(
+                block, text=text,
+                font=("Segoe UI", 11, "bold"),
+                bg="white", fg=dark
+            ).pack(anchor="w")
+
+            tk.Label(
+                block, text=hint,
+                font=("Segoe UI", 9),
+                bg="white", fg=muted
+            ).pack(anchor="w", pady=(4, 0))
+
+        def add_input(row):
+            frame = tk.Frame(
+                form, bg="white",
+                highlightthickness=1,
+                highlightbackground="#DCE5E1"
+            )
+            frame.grid(
+                row=row, column=1,
+                sticky="ew", pady=12
+            )
+            return frame
+
+        # Độc giả
+        add_label(0, "Độc giả", "Người mượn sách")
+        reader_box = add_input(0)
+
+        if self.role == "User":
+            self.rc = None
+            tk.Label(
+                reader_box,
+                text=self.user + " (tài khoản của bạn)",
+                font=("Segoe UI", 11),
+                bg="white", fg=dark,
+                anchor="w", padx=12, pady=10
+            ).pack(fill="x")
         else:
-            self.rc=ttk.Combobox(f,textvariable=self.borrow_r,width=50,state="readonly"); self.rc.grid(row=0,column=1,pady=12)
-        tk.Label(f,text="Sách",bg="white",font=("Segoe UI",10,"bold")).grid(row=1,column=0,padx=20,pady=12)
-        self.bc=ttk.Combobox(f,textvariable=self.borrow_b,width=50,state="readonly"); self.bc.grid(row=1,column=1,pady=12)
-        tk.Label(f,text="Số ngày mượn",bg="white",font=("Segoe UI",10,"bold")).grid(row=2,column=0,padx=20,pady=12)
-        self.days=tk.Entry(f,width=20); self.days.insert(0,"14"); self.days.grid(row=2,column=1,sticky="w",pady=12)
-        self.button(f,"XÁC NHẬN MƯỢN",self.do_borrow,width=22).grid(row=3,column=1,sticky="w",pady=18)
-        self.rmap={}; self.bmap={}; self.load_borrow()
+            self.rc = ttk.Combobox(
+                reader_box,
+                textvariable=self.borrow_r,
+                state="readonly",
+                style="Borrow.TCombobox"
+            )
+            self.rc.pack(fill="x", padx=2, pady=2)
+
+        # Sách
+        add_label(1, "Sách", "Chỉ hiển thị sách còn trong kho")
+        book_box = add_input(1)
+
+        self.bc = ttk.Combobox(
+            book_box,
+            textvariable=self.borrow_b,
+            state="readonly",
+            style="Borrow.TCombobox"
+        )
+        self.bc.pack(fill="x", padx=2, pady=2)
+
+        # Số ngày mượn
+        add_label(2, "Thời hạn mượn", "Tính từ ngày tạo phiếu")
+        days_box = add_input(2)
+
+        self.days = tk.Entry(
+            days_box,
+            font=("Segoe UI", 11),
+            bg="white", fg=dark,
+            insertbackground=green,
+            relief="flat", bd=0,
+            highlightthickness=0
+        )
+        self.days.insert(0, "14")
+        self.days.pack(
+            side="left", fill="x", expand=True,
+            padx=12, pady=12
+        )
+
+        tk.Label(
+            days_box, text="ngày",
+            font=("Segoe UI", 10),
+            bg="white", fg=muted
+        ).pack(side="right", padx=14)
+
+        # Gợi ý
+        tk.Label(
+            card,
+            text="ⓘ  Hạn trả sẽ được tính tự động sau khi xác nhận mượn.",
+            font=("Segoe UI", 9),
+            bg="white", fg="#648477"
+        ).pack(anchor="w", padx=28, pady=(8, 20))
+
+        # Nút xác nhận
+        actions = tk.Frame(card, bg="white")
+        actions.pack(fill="x", padx=28, pady=(0, 26))
+
+        btn = tk.Button(
+            actions,
+            text="📚   XÁC NHẬN MƯỢN",
+            command=self.do_borrow,
+            font=("Segoe UI", 11, "bold"),
+            bg=green, fg="white",
+            activebackground="#246B45",
+            activeforeground="white",
+            relief="flat", bd=0,
+            cursor="hand2",
+            padx=24, pady=13
+        )
+        btn.pack(anchor="w")
+
+        btn.bind(
+            "<Enter>",
+            lambda e: btn.config(bg="#246B45")
+        )
+        btn.bind(
+            "<Leave>",
+            lambda e: btn.config(bg=green)
+        )
+
+        # Giữ nguyên cơ chế tải dữ liệu của chương trình
+        self.rmap = {}
+        self.bmap = {}
+        self.load_borrow()
 
     def load_borrow(self):
         c=self.db.conn.cursor()
@@ -2794,17 +3566,52 @@ class LibraryApp:
         if bv:self.bc.current(0)
 
     def do_borrow(self):
-        if (self.rc is not None and not self.rc.get()) or not self.bc.get(): messagebox.showwarning("Mượn","Hãy chọn đọc giả và sách."); return
-        try: days=int(self.days.get()); assert days>0
-        except: messagebox.showerror("Mượn","Số ngày không hợp lệ."); return
-        c=self.db.conn.cursor(); bid=self.bmap[self.bc.get()]
-        rid=self.my_reader_id() if self.role=="User" else self.rmap[self.rc.get()]
-        today=datetime.now().date(); due=today+timedelta(days=days)
-        c.execute("""INSERT INTO borrowings(book_id,reader_id,borrow_date,due_date,return_date,fine,status)
-                     VALUES(?,?,?,?,?,?,?)""",(bid,rid,str(today),str(due),"",0,"Borrowing"))
-        c.execute("UPDATE books SET available=available-1 WHERE id=?",(bid,))
+        if (self.rc is not None and not self.rc.get()) or not self.bc.get():
+            messagebox.showwarning("Mượn", "Hãy chọn độc giả và sách.")
+            return
+
+        try:
+            days = int(self.days.get())
+            assert days > 0
+        except:
+            messagebox.showerror("Mượn", "Số ngày không hợp lệ.")
+            return
+
+        c = self.db.conn.cursor()
+        bid = self.bmap[self.bc.get()]
+        rid = self.my_reader_id() if self.role == "User" else self.rmap[self.rc.get()]
+
+        today = datetime.now().date()
+        due = today + timedelta(days=days)
+
+        c.execute(
+            """INSERT INTO borrowings
+               (book_id, reader_id, borrow_date, due_date,
+                return_date, fine, status)
+               VALUES (?, ?, ?, ?, ?, ?, ?)""",
+            (bid, rid, str(today), str(due), "", 0, "Borrowing")
+        )
+
+        borrow_id = c.lastrowid
+
+        c.execute(
+            "UPDATE books SET available = available - 1 WHERE id = ?",
+            (bid,)
+        )
+
         self.db.conn.commit()
-        messagebox.showinfo("Thành công","Đã tạo phiếu mượn. Hạn trả: "+due.strftime("%d/%m/%Y"))
+
+        reader_name = self.rc.get() if self.role != "User" else str(rid)
+        book_name = self.bc.get()
+
+        self.show_borrow_success(
+            borrow_id,
+            reader_name,
+            book_name,
+            today.strftime("%d/%m/%Y"),
+            due.strftime("%d/%m/%Y")
+        )
+
         self.borrow()
 
     def my_reader_id(self):
@@ -2881,35 +3688,345 @@ class LibraryApp:
 
     # ---------------- RETURN / OVERDUE ----------------
     def returns(self):
-        if self.role=="User": return self.returns_user()
-        self.title("Trả sách","Danh sách sách đang được mượn. Yêu cầu trả của User cần Admin xác nhận.")
-        wrap=tk.Frame(self.content,bg="white"); wrap.pack(fill="x",padx=28,pady=(10,0))
-        self.tret=ttk.Treeview(wrap,columns=("id","reader","phone","book","borrow","due","late"),show="headings",height=6)
-        for col,h,w in [("id","ID",45),("reader","Đọc giả",170),("phone","SĐT",120),("book","Sách",230),
-                        ("borrow","Ngày mượn",100),("due","Hạn trả",100),("late","Quá hạn",80)]:
-            self.tret.heading(col,text=h); self.tret.column(col,width=w)
-        self.tret.pack(fill="x")
-        b=tk.Frame(self.content,bg=self.C["bg"]); b.pack(fill="x",padx=28,pady=8)
-        self.button(b,"XÁC NHẬN TRẢ SÁCH",self.do_return,width=22).pack(side="left")
-        self.load_returns()
-        # ----- yeu cau tra sach cua User dang cho Admin xac nhan -----
-        tk.Label(self.content,text="Yêu cầu trả sách chờ Admin xác nhận",bg=self.C["bg"],fg=self.C["dark"],
-                 font=("Segoe UI",12,"bold")).pack(anchor="w",padx=28,pady=(6,2))
-        pb=tk.Frame(self.content,bg=self.C["bg"]); pb.pack(fill="x",padx=28,pady=(0,6))
-        if self.role=="Admin":
-            self.button(pb,"DUYỆT TRẢ SÁCH",self.confirm_return,"green",20).pack(side="left")
-            self.button(pb,"TỪ CHỐI",self.reject_return,"red",14).pack(side="left",padx=8)
+        if self.role == "User":
+            return self.returns_user()
+
+        self.title(
+            "Trả sách",
+            "Chọn một mục bên dưới để xem và xử lý từng loại phiếu."
+        )
+
+        bg = self.C["bg"]
+        dark = self.C["dark"]
+        muted = self.C["muted"]
+
+        # Lấy số liệu thống kê
+        cur = self.db.conn.cursor()
+        cur.execute("SELECT COUNT(*) FROM borrowings WHERE status='Borrowing'")
+        borrowing_count = cur.fetchone()[0]
+
+        cur.execute("SELECT COUNT(*) FROM borrowings WHERE status='PendingReturn'")
+        pending_count = cur.fetchone()[0]
+
+        today = datetime.now().date().isoformat()
+        cur.execute("""
+            SELECT COUNT(*) FROM borrowings
+            WHERE status='Borrowing' AND due_date < ?
+        """, (today,))
+        overdue_count = cur.fetchone()[0]
+
+        # Khung tổng thể
+        page = tk.Frame(self.content, bg=bg)
+        page.pack(fill="both", expand=True, padx=28, pady=(5, 12))
+
+        # Ba ô có thể bấm như tab
+        cards = tk.Frame(page, bg=bg)
+        cards.pack(fill="x", pady=(0, 12))
+
+        content = tk.Frame(page, bg=bg)
+        content.pack(fill="both", expand=True)
+
+        tab_frames = {}
+        tab_cards = {}
+
+        
+        self.checked_rows = {
+            "borrowing": set(),
+            "pending": set(),
+            "overdue": set()
+        }
+
+        def toggle_check(tree, event):
+            if tree.identify_region(event.x, event.y) != "cell":
+                return
+
+            if tree.identify_column(event.x) != "#1":
+                return "break"
+
+            item = tree.identify_row(event.y)
+            if not item:
+                return "break"
+
+            tab_name = getattr(tree, "_check_tab", None)
+            if tab_name not in self.checked_rows:
+                return "break"
+
+            checked = self.checked_rows[tab_name]
+            values = list(tree.item(item, "values"))
+
+            if not values:
+                return "break"
+
+            if item in checked:
+                checked.remove(item)
+                values[0] = "☐"
+                tree.item(item, tags=("normal_row",))
+            else:
+                checked.add(item)
+                values[0] = "☑"
+                tree.item(item, tags=("selected_row",))
+
+            tree.item(item, values=values)
+            return "break"
+
+        tab_info = [
+            ("borrowing", "Đang mượn", borrowing_count,
+             "Phiếu chưa trả sách", "#2E8B57"),
+            ("pending", "Chờ xác nhận", pending_count,
+             "Yêu cầu cần xử lý", "#C88719"),
+            ("overdue", "Sách quá hạn", overdue_count,
+             "Đã quá ngày hẹn trả", "#C94040"),
+        ]
+
+        def switch_tab(name):
+            # Ẩn nội dung của tab trước
+            for frame in tab_frames.values():
+                frame.pack_forget()
+
+            # Hiện đúng nội dung tab được chọn
+            tab_frames[name].pack(fill="both", expand=True)
+
+            # Đánh dấu ô đang được chọn
+            for key, card in tab_cards.items():
+                card.configure(
+                    highlightbackground=(
+                        tab_info[["borrowing", "pending", "overdue"].index(key)][4]
+                        if key == name else self.C["border"]
+                    ),
+                    highlightthickness=2 if key == name else 1
+                )
+
+        for i, (key, heading, number, description, accent) in enumerate(tab_info):
+            card = tk.Frame(
+                cards,
+                bg="white",
+                highlightbackground=self.C["border"],
+                highlightthickness=1,
+                cursor="hand2"
+            )
+            card.grid(
+                row=0, column=i, sticky="nsew",
+                padx=(0 if i == 0 else 6, 0 if i == 2 else 6)
+            )
+            cards.grid_columnconfigure(i, weight=1, uniform="return_cards")
+            tab_cards[key] = card
+
+            tk.Frame(card, bg=accent, height=4).pack(fill="x")
+
+            info = tk.Frame(card, bg="white", padx=14, pady=8, cursor="hand2")
+            info.pack(fill="both", expand=True)
+
+            title_label = tk.Label(
+                info, text=heading, bg="white", fg=dark,
+                font=("Segoe UI", 10, "bold"), cursor="hand2"
+            )
+            title_label.pack(anchor="w")
+
+            number_label = tk.Label(
+                info, text=str(number), bg="white", fg=dark,
+                font=("Segoe UI", 22, "bold"), cursor="hand2"
+            )
+            number_label.pack(anchor="w", pady=1)
+
+            desc_label = tk.Label(
+                info, text=description, bg="white", fg=muted,
+                font=("Segoe UI", 9), cursor="hand2"
+            )
+            desc_label.pack(anchor="w")
+
+            # Bấm ở bất kỳ vị trí nào trong ô đều chuyển tab
+            for widget in (card, info, title_label, number_label, desc_label):
+                widget.bind(
+                    "<Button-1>",
+                    lambda event, selected=key: switch_tab(selected)
+                )
+
+        # Tạo bảng có thanh cuộn 
+        def build_table(parent, columns, headings, widths, height=10,
+                        selectable=False):
+            area = tk.Frame(
+                parent, bg="white",
+                highlightbackground=self.C["border"],
+                highlightthickness=1
+            )
+            area.pack(fill="both", expand=True)
+
+            table_area = tk.Frame(area, bg="white")
+            table_area.pack(fill="both", expand=True, padx=8, pady=8)
+
+            tree = ttk.Treeview(
+                table_area, columns=columns, show="headings",
+                height=height, selectmode="browse"
+            )
+
+            vs = ttk.Scrollbar(
+                table_area, orient="vertical", command=tree.yview
+            )
+            hs = ttk.Scrollbar(
+                table_area, orient="horizontal", command=tree.xview
+            )
+            tree.configure(yscrollcommand=vs.set, xscrollcommand=hs.set)
+
+            for col, heading, width in zip(columns, headings, widths):
+                tree.heading(col, text=heading)
+
+                if col == "pick":
+                    tree.column(
+                        col,
+                        width=65,
+                        minwidth=65,
+                        anchor="center",
+                        stretch=False
+                    )
+                else:
+                    tree.column(
+                        col,
+                        width=width,
+                        minwidth=55,
+                        anchor="w"
+                    )
+
+            tree.tag_configure(
+                "normal_row",
+                background="#FFFFFF",
+                foreground="#374151",
+                font=("Segoe UI", 10)
+            )
+
+            tree.tag_configure(
+                "selected_row",
+                background="#E8F5E9",
+                foreground="#2E8B57",
+                font=("Segoe UI", 10)
+            )   
+
+            tree.grid(row=0, column=0, sticky="nsew")
+            vs.grid(row=0, column=1, sticky="ns")
+            hs.grid(row=1, column=0, sticky="ew")
+
+            table_area.grid_rowconfigure(0, weight=1)
+            table_area.grid_columnconfigure(0, weight=1)
+
+            if selectable:
+                tree.bind("<Button-1>", lambda event: toggle_check(tree, event))
+
+            return tree
+
+        # Nội dung tab ĐANG MƯỢN
+        borrowing_tab = tk.Frame(content, bg=bg)
+        tab_frames["borrowing"] = borrowing_tab
+
+        tk.Label(
+            borrowing_tab, text="Danh sách sách đang được mượn",
+            bg=bg, fg=dark, font=("Segoe UI", 12, "bold")
+        ).pack(anchor="w", pady=(0, 8))
+
+        self.tret = build_table(
+            borrowing_tab,
+            ("pick", "id", "reader", "phone", "book", "borrow", "due", "late"),
+            ("Chọn", "Mã phiếu", "Độc giả", "Số điện thoại", "Tên sách",
+             "Ngày mượn", "Hạn trả", "Quá hạn"),
+            (55, 75, 160, 120, 240, 105, 105, 85),
+            height=10,
+            selectable=True
+        )
+        self.tret._check_tab = "borrowing"
+
+        active_actions = tk.Frame(borrowing_tab, bg=bg)
+        active_actions.pack(fill="x", pady=(10, 0))
+
+        self.button(
+            active_actions, "✓  XÁC NHẬN TRẢ SÁCH",
+            self.do_return, width=24
+        ).pack(side="left")
+
+        # Nội dung tab CHỜ XÁC NHẬN
+        pending_tab = tk.Frame(content, bg=bg)
+        tab_frames["pending"] = pending_tab
+
+        tk.Label(
+            pending_tab, text="Yêu cầu trả sách chờ Admin duyệt",
+            bg=bg, fg=dark, font=("Segoe UI", 12, "bold")
+        ).pack(anchor="w", pady=(0, 8))
+
+        
+        self.pending_checked = set()
+
+        self.tpend = build_table(
+            pending_tab,
+            ("pick", "id", "reader", "book", "due", "req", "fine"),
+            ("Chọn", "Mã phiếu", "Độc giả", "Tên sách", "Hạn trả",
+             "Ngày yêu cầu", "Tiền phạt tạm tính"),
+            (55, 75, 170, 240, 105, 125, 145),
+            height=10,
+            selectable=True
+        )
+        self.tpend._check_tab = "pending"
+
+        pending_actions = tk.Frame(pending_tab, bg=bg)
+        pending_actions.pack(fill="x", pady=(10, 0))
+
+        if self.role == "Admin":
+            self.button(
+                pending_actions,
+                "✓  DUYỆT PHIẾU ĐÚNG HẠN",
+                self.confirm_on_time_returns,
+                "green", 24
+            ).pack(side="left")
+
+            self.button(
+                pending_actions,
+                "✓  DUYỆT CÁC PHIẾU ĐÃ CHỌN",
+                self.confirm_selected_returns,
+                "green", 27
+            ).pack(side="left", padx=8)
+
+            self.button(
+                pending_actions, "✕  TỪ CHỐI",
+                self.reject_return, "red", 14
+            ).pack(side="left", padx=8)
         else:
-            tk.Label(pb,text="Chỉ Admin mới có quyền duyệt yêu cầu trả sách.",bg=self.C["bg"],fg=self.C["muted"]).pack(side="left")
-        pw=tk.Frame(self.content,bg="white"); pw.pack(fill="both",expand=True,padx=28,pady=(0,10))
-        self.tpend=ttk.Treeview(pw,columns=("id","reader","book","due","req","fine"),show="headings",height=4)
-        for col,h,w in [("id","ID",45),("reader","Đọc giả",170),("book","Sách",230),("due","Hạn trả",100),
-                        ("req","Ngày yêu cầu",110),("fine","Tiền phạt",110)]:
-            self.tpend.heading(col,text=h); self.tpend.column(col,width=w)
-        self.tpend.pack(fill="both",expand=True)
+            tk.Label(
+                pending_actions,
+                text="Chỉ Admin mới có quyền duyệt yêu cầu trả sách.",
+                bg=bg, fg=muted
+            ).pack(side="left")
+
+        # Nội dung tab SÁCH QUÁ HẠN
+        overdue_tab = tk.Frame(content, bg=bg)
+        tab_frames["overdue"] = overdue_tab
+
+        tk.Label(
+            overdue_tab, text="Danh sách phiếu mượn quá hạn",
+            bg=bg, fg=dark, font=("Segoe UI", 12, "bold")
+        ).pack(anchor="w", pady=(0, 8))
+
+        self.tlate = build_table(
+            overdue_tab,
+            ("pick", "id", "reader", "phone", "book", "due", "late", "fine"),
+            ("Chọn", "Mã phiếu", "Độc giả", "Số điện thoại", "Tên sách",
+             "Hạn trả", "Số ngày quá hạn", "Tiền phạt tạm tính"),
+            (55, 75, 160, 120, 230, 105, 125, 145),
+            height=10,
+            selectable=True
+        )
+        self.tlate._check_tab = "overdue"
+
+        self.tret.column("pick", width=65, minwidth=65, anchor="center", stretch=False)
+        self.tpend.column("pick", width=65, minwidth=65, anchor="center", stretch=False)
+        self.tlate.column("pick", width=65, minwidth=65, anchor="center", stretch=False)
+
+        # Nạp dữ liệu cho cả ba tab
+        self.load_returns()
         self.load_pending()
+        self.load_overdue_tab()
+
+        # Mặc định mở tab Đang mượn
+        switch_tab("borrowing")
 
     def load_returns(self):
+        for item in self.tret.get_children():
+            self.tret.delete(item)
         c=self.db.conn.cursor()
         c.execute("""SELECT b.id,r.name,r.phone,bo.title,b.borrow_date,b.due_date
                      FROM borrowings b JOIN readers r ON r.id=b.reader_id
@@ -2918,19 +4035,49 @@ class LibraryApp:
         today=datetime.now().date()
         for r in c.fetchall():
             due=datetime.strptime(r[5],"%Y-%m-%d").date(); late=max((today-due).days,0)
-            self.tret.insert("", "end", values=(r[0],r[1],r[2],r[3],self.fd(r[4]),self.fd(r[5]),
-                                                str(late)+" ngày" if late else "-"))
+            self.tret.insert(
+                "", "end",
+                values=("☐", r[0], r[1], r[2], r[3],
+                    self.fd(r[4]), self.fd(r[5]),
+                    str(late) + " ngày" if late else "-")
+            )
 
     def load_pending(self):
-        c=self.db.conn.cursor()
-        c.execute("""SELECT b.id,r.name,bo.title,b.due_date,b.request_date FROM borrowings b
-                     JOIN readers r ON r.id=b.reader_id JOIN books bo ON bo.id=b.book_id
-                     WHERE b.status='PendingReturn' ORDER BY b.request_date""")
-        for bid,name,title,due,req in c.fetchall():
-            ref=datetime.strptime(req,"%Y-%m-%d").date() if req else datetime.now().date()
-            late=max((ref-datetime.strptime(due,"%Y-%m-%d").date()).days,0)
-            self.tpend.insert("","end",iid=str(bid),values=(bid,name,title,self.fd(due),self.fd(req) if req else "-",
-                                                            "{:,} VNĐ".format(late*FINE_PER_DAY)))
+        for item in self.tpend.get_children():
+            self.tpend.delete(item)
+
+        self.pending_checked = set()
+
+        c = self.db.conn.cursor()
+        c.execute("""
+            SELECT b.id, r.name, bo.title, b.due_date, b.request_date
+            FROM borrowings b
+            JOIN readers r ON r.id = b.reader_id
+            JOIN books bo ON bo.id = b.book_id
+            WHERE b.status = 'PendingReturn'
+            ORDER BY b.request_date
+        """)
+
+        for bid, name, title, due, req in c.fetchall():
+            ref = (
+                datetime.strptime(req, "%Y-%m-%d").date()
+                if req else datetime.now().date()
+            )
+            late = max(
+                (ref - datetime.strptime(due, "%Y-%m-%d").date()).days,
+                0
+            )
+
+            self.tpend.insert(
+                "", "end",
+                iid=str(bid),
+                values=(
+                    "☐", bid, name, title,
+                    self.fd(due),
+                    self.fd(req) if req else "-",
+                    "{:,} VNĐ".format(late * FINE_PER_DAY)
+                )
+            )
 
     def _pending_row(self):
         s=self.tpend.selection()
@@ -2956,11 +4103,77 @@ class LibraryApp:
         messagebox.showinfo("Thành công","Đã duyệt trả sách. Tiền phạt: {:,} VNĐ".format(fine)); self.returns()
 
     def reject_return(self):
-        r=self._pending_row()
-        if not r: return
-        if not messagebox.askyesno("Từ chối","Từ chối yêu cầu trả sách này? Phiếu quay lại trạng thái đang mượn."): return
-        self.db.conn.execute("UPDATE borrowings SET status='Borrowing',request_date=NULL WHERE id=?",(r[0],))
-        self.db.conn.commit(); self.returns()
+        selected_rows = list(
+            self.checked_rows.get("pending", set())
+        )
+
+        selected_ids = []
+
+        for row_id in selected_rows:
+            if not self.tpend.exists(row_id):
+                continue
+
+            values = self.tpend.item(row_id, "values")
+
+            # Cột 0 là ô tích, cột 1 là mã phiếu
+            if len(values) > 1:
+                try:
+                    selected_ids.append(int(values[1]))
+                except (ValueError, TypeError):
+                    continue
+
+        if not selected_ids:
+            messagebox.showwarning(
+                "Từ chối",
+                "Hãy tích chọn ít nhất một phiếu cần từ chối."
+            )
+            return
+
+        if not messagebox.askyesno(
+            "Xác nhận từ chối",
+            "Bạn có chắc muốn từ chối {} phiếu đã chọn?".format(
+                len(selected_ids)
+            )
+        ):
+            return
+
+        c = self.db.conn.cursor()
+
+        try:
+            rejected = 0
+
+            for bid in selected_ids:
+                c.execute("""
+                    UPDATE borrowings
+                    SET status = 'Borrowing'
+                    WHERE id = ?
+                      AND status = 'PendingReturn'
+                """, (bid,))
+
+                if c.rowcount > 0:
+                    rejected += 1
+
+            self.db.conn.commit()
+
+        except Exception as e:
+            self.db.conn.rollback()
+            messagebox.showerror(
+                "Lỗi",
+                "Không thể từ chối phiếu:\n{}".format(e)
+            )
+            return
+
+        self.checked_rows["pending"].clear()
+        self.pending_checked.clear()
+
+        self.load_pending()
+        self.load_returns()
+        self.load_overdue_tab()
+
+        messagebox.showinfo(
+            "Thành công",
+            "Đã từ chối {} phiếu trả sách.".format(rejected)
+        )
 
     def returns_user(self):
         self.title("Trả sách","Sách bạn đã mượn. Yêu cầu trả sách sẽ được Admin xác nhận.")
@@ -3002,15 +4215,111 @@ class LibraryApp:
         self.returns()
 
     def do_return(self):
-        s=self.tret.selection()
-        if not s: messagebox.showwarning("Trả","Hãy chọn phiếu."); return
-        bid=self.tret.item(s[0])["values"][0]; c=self.db.conn.cursor()
-        c.execute("SELECT book_id,due_date FROM borrowings WHERE id=?",(bid,)); book,due=c.fetchone()
-        today=datetime.now().date(); late=max((today-datetime.strptime(due,"%Y-%m-%d").date()).days,0); fine=late*FINE_PER_DAY
-        if not messagebox.askyesno("Xác nhận","Tiền phạt: {:,} VNĐ\nXác nhận trả?".format(fine)): return
-        c.execute("UPDATE borrowings SET return_date=?,fine=?,status='Returned' WHERE id=?",(str(today),fine,bid))
-        c.execute("UPDATE books SET available=available+1 WHERE id=?",(book,)); self.db.conn.commit()
-        messagebox.showinfo("Thành công","Đã trả sách. Tiền phạt: {:,} VNĐ".format(fine)); self.returns()
+        # Lấy các mã phiếu đã tích chọn
+        selected_rows = list(self.checked_rows.get("borrowing", set()))
+
+        selected_ids = [
+            int(self.tret.item(row_id, "values")[1])
+            for row_id in selected_rows
+            if self.tret.exists(row_id)
+        ]
+
+        if not selected_ids:
+            messagebox.showwarning(
+                "Trả sách",
+                "Hãy tích chọn ít nhất một phiếu cần trả."
+            )
+            return
+
+        c = self.db.conn.cursor()
+        today = datetime.now().date()
+        total_fine = 0
+        returned_count = 0
+
+        # Kiểm tra các phiếu trước khi xác nhận
+        records = []
+
+        for bid in selected_ids:
+
+            c.execute(
+                "SELECT book_id, due_date FROM borrowings "
+                "WHERE id=? AND status='Borrowing'",
+                (bid,)
+            )
+            result = c.fetchone()
+
+            if result is not None:
+                book_id, due = result
+                late = max(
+                    (today - datetime.strptime(
+                        due, "%Y-%m-%d"
+                    ).date()).days,
+                    0
+                )
+                fine = late * FINE_PER_DAY
+
+                records.append((bid, book_id, fine))
+                total_fine += fine
+
+        if not records:
+            messagebox.showwarning(
+                "Trả sách",
+                "Không tìm thấy phiếu mượn hợp lệ. "
+                "Vui lòng tải lại danh sách."
+            )
+            return
+
+        if not self.show_return_confirm(
+            len(records), total_fine
+        ):
+            return
+
+        try:
+            for bid, book_id, fine in records:
+                c.execute(
+                    "UPDATE borrowings "
+                    "SET return_date=?, fine=?, status='Returned' "
+                    "WHERE id=? AND status='Borrowing'",
+                    (str(today), fine, bid)
+                )
+
+                if c.rowcount > 0:
+                    c.execute(
+                        "UPDATE books "
+                        "SET available=available+1 WHERE id=?",
+                        (book_id,)
+                    )
+                    returned_count += 1
+
+            self.db.conn.commit()
+
+        except Exception as e:
+            self.db.conn.rollback()
+            messagebox.showerror(
+                "Lỗi trả sách",
+                "Không thể cập nhật phiếu trả sách:\n{}".format(e)
+            )
+            return
+
+        # Bỏ chọn và cập nhật lại dữ liệu
+        self.checked_rows["borrowing"].clear()
+
+        # Xóa các dòng cũ trước khi tải lại danh sách
+        for tree in (self.tret, self.tpend, self.tlate):
+            for item in tree.get_children():
+                tree.delete(item)
+
+        self.load_returns()
+        self.load_pending()
+        self.load_overdue_tab()
+
+        self.show_return_success(
+            "Trả sách thành công!",
+            "Đã trả thành công {} phiếu mượn.\n\n"
+            "Tổng tiền phạt: {:,} VNĐ".format(
+                returned_count, total_fine
+            )
+        )
 
     def overdue(self):
         self.title("Sách quá hạn","Những phiếu đang mượn đã vượt quá hạn trả.")
