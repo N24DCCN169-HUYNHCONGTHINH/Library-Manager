@@ -208,6 +208,42 @@ class Database:
         # Nang cap DB cu: ngay yeu cau tra sach (user gui) + lien ket doc gia <-> tai khoan
         bcols=[r[1] for r in c.execute("PRAGMA table_info(borrowings)")]
         if "request_date" not in bcols: c.execute("ALTER TABLE borrowings ADD COLUMN request_date TEXT")
+        # Nang cap DB cu: ngay yeu cau tra sach (user gui) + lien ket doc gia <-> tai khoan
+        bcols = [r[1] for r in c.execute("PRAGMA table_info(borrowings)")]
+
+        if "request_date" not in bcols:
+            c.execute("ALTER TABLE borrowings ADD COLUMN request_date TEXT")
+
+        # Them ma phieu de gom nhieu cuon sach trong cung mot phieu
+        bcols = [r[1] for r in c.execute("PRAGMA table_info(borrowings)")]
+
+        if "loan_code" not in bcols:
+            c.execute("ALTER TABLE borrowings ADD COLUMN loan_code TEXT")
+
+        c.execute("""
+            SELECT id
+            FROM borrowings
+            WHERE loan_code IS NULL OR TRIM(loan_code) = ''
+            ORDER BY id
+        """)
+
+        for (old_id,) in c.fetchall():
+            c.execute(
+                "UPDATE borrowings SET loan_code = ? WHERE id = ?",
+                ("PM-OLD-{:06d}".format(old_id), old_id)
+            )
+
+        # Tang toc do tim kiem theo ma phieu
+        c.execute("""
+            CREATE INDEX IF NOT EXISTS idx_borrowings_loan_code
+            ON borrowings(loan_code)
+        """)
+
+        rcols = [r[1] for r in c.execute("PRAGMA table_info(readers)")]
+        if "user_id" not in rcols:
+            c.execute("ALTER TABLE readers ADD COLUMN user_id INTEGER")
+
+        self.conn.commit()
         rcols=[r[1] for r in c.execute("PRAGMA table_info(readers)")]
         if "user_id" not in rcols: c.execute("ALTER TABLE readers ADD COLUMN user_id INTEGER")
         self.conn.commit()
@@ -556,7 +592,7 @@ class LibraryApp:
         popup.resizable(False, False)
         popup.configure(bg="#FFFFFF")
 
-        width, height = 440, 460
+        width, height = 480, 540
         self.root.update_idletasks()
 
         x = self.root.winfo_rootx() + (
@@ -652,8 +688,8 @@ class LibraryApp:
                 bg="#F8FAFC",
                 anchor="e",
                 justify="right",
-                wraplength=235
-            ).pack(side="right")
+                wraplength=270
+            ).pack(side="right", fill="x", expand=True)
 
         tk.Button(
             body,
@@ -3324,94 +3360,70 @@ class LibraryApp:
 
     # ---------------- BORROW ----------------
     def borrow(self):
+        """Giao diện mượn sách được bố trí lại; giữ nguyên các hàm xử lý hiện có."""
         self.title("Mượn sách", "Tạo phiếu mượn và tự động cập nhật kho.")
 
         C = self.C
-        bg = C["bg"]
-        green = C["green"]
-        dark = C["dark"]
-        muted = C["muted"]
-        border = C["border"]
+        bg, green, dark, muted, border = (
+            C["bg"], C["green"], C["dark"], C["muted"], C["border"]
+        )
 
-        # Khung chứa toàn bộ giao diện
         page = tk.Frame(self.content, bg=bg)
-        page.pack(fill="both", expand=True, padx=28, pady=(12, 24))
+        page.pack(fill="both", expand=True, padx=16, pady=(0, 4))
 
-        # Thẻ giới thiệu
+        # Banner tiêu đề gọn hơn, không thay đổi bảng màu chung.
         hero = tk.Frame(
             page, bg="#E8F6EF",
-            highlightthickness=1,
-            highlightbackground="#D4EADF"
+            highlightthickness=1, highlightbackground="#D4EADF"
         )
-        hero.pack(fill="x", pady=(0, 18))
-
+        hero.pack(fill="x", pady=(0, 8))
         hero_inner = tk.Frame(hero, bg="#E8F6EF")
-        hero_inner.pack(fill="x", padx=26, pady=22)
-
-        icon = tk.Label(
-            hero_inner, text="📚",
-            font=("Segoe UI Emoji", 25),
-            bg="#D2EFE0", fg=green,
-            width=3, height=1
-        )
-        icon.pack(side="left", padx=(0, 18), ipady=8)
-
-        heading = tk.Frame(hero_inner, bg="#E8F6EF")
-        heading.pack(side="left", fill="x", expand=True)
+        hero_inner.pack(fill="x", padx=16, pady=7)
 
         tk.Label(
-            heading, text="Tạo phiếu mượn sách",
-            font=("Segoe UI", 19, "bold"),
+            hero_inner, text="▣", font=("Segoe UI", 20, "bold"),
+            bg="#D2EFE0", fg=green, width=3, pady=5
+        ).pack(side="left", padx=(0, 15))
+        hero_text = tk.Frame(hero_inner, bg="#E8F6EF")
+        hero_text.pack(side="left", fill="x", expand=True)
+        tk.Label(
+            hero_text, text="Tạo phiếu mượn sách",
+            font=("Segoe UI", 16, "bold"),
             bg="#E8F6EF", fg="#176747"
         ).pack(anchor="w")
-
         tk.Label(
-            heading,
-            text="Điền thông tin bên dưới để tạo phiếu mượn mới.",
-            font=("Segoe UI", 10),
-            bg="#E8F6EF", fg="#648477"
-        ).pack(anchor="w", pady=(5, 0))
+            hero_text,
+            text="Chọn độc giả, thêm sách cần mượn và thiết lập hạn trả.",
+            font=("Segoe UI", 9), bg="#E8F6EF", fg="#648477"
+        ).pack(anchor="w", pady=(2, 0))
 
-        # Thẻ nhập thông tin
+        # Thẻ thông tin chính.
         card = tk.Frame(
-            page, bg="white",
-            highlightthickness=1,
+            page, bg="white", highlightthickness=1,
             highlightbackground="#E0E8E5"
         )
-        card.pack(fill="x")
+        card.pack(fill="both", expand=True)
 
+        card_head = tk.Frame(card, bg="white")
+        card_head.pack(fill="x", padx=18, pady=(9, 2))
         tk.Label(
-            card, text="THÔNG TIN MƯỢN SÁCH",
-            font=("Segoe UI", 10, "bold"),
-            bg="white", fg=green
-        ).pack(anchor="w", padx=28, pady=(24, 4))
-
+            card_head, text="THÔNG TIN PHIẾU MƯỢN",
+            font=("Segoe UI", 11, "bold"), bg="white", fg=green
+        ).pack(anchor="w")
         tk.Label(
-            card,
-            text="Vui lòng kiểm tra độc giả và số lượng sách trước khi xác nhận.",
-            font=("Segoe UI", 9),
-            bg="white", fg=muted
-        ).pack(anchor="w", padx=28, pady=(0, 20))
-
-        # Nội dung form
-        form = tk.Frame(card, bg="white")
-        form.pack(fill="x", padx=28, pady=(0, 8))
-
-        form.grid_columnconfigure(0, minsize=155)
-        form.grid_columnconfigure(1, weight=1)
+            card_head,
+            text="Kiểm tra thông tin trước khi xác nhận tạo phiếu.",
+            font=("Segoe UI", 9), bg="white", fg=muted
+        ).pack(anchor="w", pady=(2, 0))
 
         self.borrow_r = tk.StringVar()
         self.borrow_b = tk.StringVar()
 
-        # Kiểu ô chọn dùng riêng cho màn hình mượn sách
         style = ttk.Style()
         style.configure(
-            "Borrow.TCombobox",
-            font=("Segoe UI", 11),
-            padding=(10, 9),
-            foreground=dark,
-            fieldbackground="#FFFFFF",
-            background="#FFFFFF",
+            "Borrow.TCombobox", font=("Segoe UI", 10),
+            padding=(8, 7), foreground=dark,
+            fieldbackground="#FFFFFF", background="#FFFFFF",
             arrowcolor=green
         )
         style.map(
@@ -3421,191 +3433,417 @@ class LibraryApp:
             selectforeground=[("readonly", dark)]
         )
 
-        def add_label(row, text, hint):
-            block = tk.Frame(form, bg="white")
-            block.grid(
-                row=row, column=0,
-                sticky="nw", padx=(0, 18), pady=12
-            )
+        # Hai cột giúp các trường không bị kéo dài quá mức.
+        fields = tk.Frame(card, bg="white")
+        fields.pack(fill="x", padx=18, pady=(6, 5))
+        fields.grid_columnconfigure(0, weight=1, uniform="borrowcols")
+        fields.grid_columnconfigure(1, weight=2, uniform="borrowcols")
 
-            tk.Label(
-                block, text=text,
-                font=("Segoe UI", 11, "bold"),
-                bg="white", fg=dark
-            ).pack(anchor="w")
+        reader_panel = tk.Frame(
+            fields, bg="#FBFDFC", highlightthickness=1,
+            highlightbackground="#E0E8E5"
+        )
+        reader_panel.grid(row=0, column=0, sticky="nsew", padx=(0, 8))
+        book_panel = tk.Frame(
+            fields, bg="#FBFDFC", highlightthickness=1,
+            highlightbackground="#E0E8E5"
+        )
+        book_panel.grid(row=0, column=1, sticky="nsew", padx=(8, 0))
 
-            tk.Label(
-                block, text=hint,
-                font=("Segoe UI", 9),
-                bg="white", fg=muted
-            ).pack(anchor="w", pady=(4, 0))
-
-        def add_input(row):
-            frame = tk.Frame(
-                form, bg="white",
-                highlightthickness=1,
-                highlightbackground="#DCE5E1"
-            )
-            frame.grid(
-                row=row, column=1,
-                sticky="ew", pady=12
-            )
-            return frame
-
-        # Độc giả
-        add_label(0, "Độc giả", "Người mượn sách")
-        reader_box = add_input(0)
+        # Cột trái: độc giả và thời hạn.
+        tk.Label(
+            reader_panel, text="01  ĐỘC GIẢ",
+            font=("Segoe UI", 10, "bold"), bg="#FBFDFC", fg=green
+        ).pack(anchor="w", padx=12, pady=(8, 3))
+        tk.Label(
+            reader_panel, text="Người đứng tên phiếu mượn",
+            font=("Segoe UI", 9), bg="#FBFDFC", fg=muted
+        ).pack(anchor="w", padx=12, pady=(0, 4))
 
         if self.role == "User":
             self.rc = None
             tk.Label(
-                reader_box,
-                text=self.user + " (tài khoản của bạn)",
-                font=("Segoe UI", 11),
-                bg="white", fg=dark,
-                anchor="w", padx=12, pady=10
-            ).pack(fill="x")
+                reader_panel, text=self.user + " (tài khoản của bạn)",
+                font=("Segoe UI", 10), bg="white", fg=dark,
+                anchor="w", padx=10, pady=11,
+                highlightthickness=1, highlightbackground="#DCE5E1"
+            ).pack(fill="x", padx=16)
         else:
             self.rc = ttk.Combobox(
-                reader_box,
-                textvariable=self.borrow_r,
-                state="readonly",
-                style="Borrow.TCombobox"
+                reader_panel, textvariable=self.borrow_r,
+                state="readonly", style="Borrow.TCombobox"
             )
-            self.rc.pack(fill="x", padx=2, pady=2)
+            self.rc.pack(fill="x", padx=12, pady=(0, 2))
 
-        # Sách
-        add_label(1, "Sách", "Chỉ hiển thị sách còn trong kho")
-        book_box = add_input(1)
-
-        self.bc = ttk.Combobox(
-            book_box,
-            textvariable=self.borrow_b,
-            state="readonly",
-            style="Borrow.TCombobox"
+        tk.Frame(reader_panel, bg="#E5ECE8", height=1).pack(
+            fill="x", padx=12, pady=7
         )
-        self.bc.pack(fill="x", padx=2, pady=2)
+        tk.Label(
+            reader_panel, text="02  THỜI HẠN MƯỢN",
+            font=("Segoe UI", 10, "bold"), bg="#FBFDFC", fg=green
+        ).pack(anchor="w", padx=12, pady=(0, 3))
+        tk.Label(
+            reader_panel, text="Số ngày tính từ ngày tạo phiếu",
+            font=("Segoe UI", 9), bg="#FBFDFC", fg=muted
+        ).pack(anchor="w", padx=12, pady=(0, 4))
 
-        # Số ngày mượn
-        add_label(2, "Thời hạn mượn", "Tính từ ngày tạo phiếu")
-        days_box = add_input(2)
-
+        days_box = tk.Frame(
+            reader_panel, bg="white", highlightthickness=1,
+            highlightbackground="#DCE5E1"
+        )
+        days_box.pack(fill="x", padx=12, pady=(0, 9))
         self.days = tk.Entry(
-            days_box,
-            font=("Segoe UI", 11),
-            bg="white", fg=dark,
-            insertbackground=green,
-            relief="flat", bd=0,
-            highlightthickness=0
+            days_box, font=("Segoe UI", 11), bg="white", fg=dark,
+            insertbackground=green, relief="flat", bd=0
         )
         self.days.insert(0, "14")
-        self.days.pack(
-            side="left", fill="x", expand=True,
-            padx=12, pady=12
-        )
-
+        self.days.pack(side="left", fill="x", expand=True, padx=10, pady=6)
         tk.Label(
-            days_box, text="ngày",
-            font=("Segoe UI", 10),
+            days_box, text="ngày", font=("Segoe UI", 9),
             bg="white", fg=muted
-        ).pack(side="right", padx=14)
+        ).pack(side="right", padx=10)
 
-        # Gợi ý
+        # Cột phải: chọn sách và thêm vào phiếu.
         tk.Label(
-            card,
-            text="ⓘ  Hạn trả sẽ được tính tự động sau khi xác nhận mượn.",
-            font=("Segoe UI", 9),
-            bg="white", fg="#648477"
-        ).pack(anchor="w", padx=28, pady=(8, 20))
+            book_panel, text="03  CHỌN SÁCH",
+            font=("Segoe UI", 10, "bold"), bg="#FBFDFC", fg=green
+        ).pack(anchor="w", padx=12, pady=(8, 3))
+        tk.Label(
+            book_panel,
+            text="Chọn một cuốn trong danh sách rồi nhấn Thêm sách.",
+            font=("Segoe UI", 9), bg="#FBFDFC", fg=muted
+        ).pack(anchor="w", padx=12, pady=(0, 4))
 
-        # Nút xác nhận
-        actions = tk.Frame(card, bg="white")
-        actions.pack(fill="x", padx=28, pady=(0, 26))
+        choose_row = tk.Frame(book_panel, bg="#FBFDFC")
+        choose_row.pack(fill="x", padx=12, pady=(0, 7))
+        self.bc = ttk.Combobox(
+            choose_row, textvariable=self.borrow_b,
+            state="readonly", style="Borrow.TCombobox"
+        )
+        self.bc.pack(side="left", fill="x", expand=True, padx=(0, 8))
+        add_book_btn = tk.Button(
+            choose_row, text="+  Thêm sách",
+            command=self.add_borrow_book,
+            font=("Segoe UI", 9, "bold"),
+            bg="#E8F6EF", fg="#176747",
+            activebackground="#D2EFE0", activeforeground="#176747",
+            relief="flat", bd=0, cursor="hand2", padx=14, pady=9
+        )
+        add_book_btn.pack(side="right")
 
+        tk.Label(
+            book_panel, text="LƯU Ý",
+            font=("Segoe UI", 9, "bold"), bg="#FBFDFC", fg=dark
+        ).pack(anchor="w", padx=12)
+        tk.Label(
+            book_panel,
+            text="Chỉ sách còn khả dụng mới xuất hiện trong danh sách. "
+                 "Không thể thêm trùng cùng một lựa chọn.",
+            font=("Segoe UI", 9), bg="#FBFDFC", fg=muted,
+            justify="left", wraplength=500
+        ).pack(anchor="w", padx=12, pady=(3, 7))
+
+        # Khu vực sách đã chọn, giữ nguyên Listbox để tương thích logic xóa hiện tại.
+        selected_head = tk.Frame(card, bg="white")
+        selected_head.pack(fill="x", padx=18, pady=(0, 4))
+        tk.Label(
+            selected_head, text="DANH SÁCH SÁCH ĐÃ CHỌN",
+            font=("Segoe UI", 10, "bold"), bg="white", fg=dark
+        ).pack(side="left")
+        self.borrow_count_label = tk.Label(
+            selected_head, text="0 cuốn",
+            font=("Segoe UI", 9, "bold"), bg="#E8F6EF", fg="#176747",
+            padx=9, pady=3
+        )
+        self.borrow_count_label.pack(side="right")
+
+        list_wrap = tk.Frame(
+            card, bg="white", highlightthickness=1,
+            highlightbackground="#DCE5E1"
+        )
+        list_wrap.pack(fill="x", padx=18)
+        self.borrow_book_list = tk.Listbox(
+            list_wrap, height=2, font=("Segoe UI", 9),
+            bg="white", fg=dark, selectbackground="#D2EFE0",
+            selectforeground="#176747", relief="flat",
+            highlightthickness=0, activestyle="none",
+            borderwidth=0
+        )
+        self.borrow_book_list.pack(
+            fill="x", expand=True, padx=6, pady=3
+        )
+
+        bottom = tk.Frame(card, bg="white")
+        bottom.pack(fill="x", padx=18, pady=(6, 8))
+        tk.Label(
+            bottom,
+            text="ⓘ  Hạn trả được tính tự động sau khi xác nhận mượn.",
+            font=("Segoe UI", 8), bg="white", fg="#648477"
+        ).pack(side="left")
+        tk.Button(
+            bottom, text="Xóa sách đã chọn",
+            command=self.remove_borrow_book,
+            font=("Segoe UI", 9), bg="white", fg="#B42318",
+            activebackground="#FDECEC", relief="flat", bd=0,
+            cursor="hand2", padx=8, pady=6
+        ).pack(side="right", padx=(8, 0))
         btn = tk.Button(
-            actions,
-            text="📚   XÁC NHẬN MƯỢN",
+            bottom, text="✓  XÁC NHẬN MƯỢN",
             command=self.do_borrow,
-            font=("Segoe UI", 11, "bold"),
-            bg=green, fg="white",
-            activebackground="#246B45",
-            activeforeground="white",
-            relief="flat", bd=0,
-            cursor="hand2",
-            padx=24, pady=13
+            font=("Segoe UI", 10, "bold"),
+            bg=green, fg="white", activebackground="#246B45",
+            activeforeground="white", relief="flat", bd=0,
+            cursor="hand2", padx=16, pady=7
         )
-        btn.pack(anchor="w")
+        btn.pack(side="right")
+        btn.bind("<Enter>", lambda e: btn.config(bg="#246B45"))
+        btn.bind("<Leave>", lambda e: btn.config(bg=green))
 
-        btn.bind(
-            "<Enter>",
-            lambda e: btn.config(bg="#246B45")
-        )
-        btn.bind(
-            "<Leave>",
-            lambda e: btn.config(bg=green)
-        )
+        self.borrow_selected_books = []
 
-        # Giữ nguyên cơ chế tải dữ liệu của chương trình
+        # Giữ nguyên cơ chế tải dữ liệu của chương trình.
         self.rmap = {}
         self.bmap = {}
         self.load_borrow()
 
+    
     def load_borrow(self):
-        c=self.db.conn.cursor()
-        if self.rc is not None:
-            c.execute("SELECT id,code,name FROM readers ORDER BY name")
-            rv=[]
-            for i,code,name in c.fetchall(): self.rmap[code+" - "+name]=i; rv.append(code+" - "+name)
-            self.rc["values"]=rv
-            if rv:self.rc.current(0)
-        c.execute("SELECT id,code,title,available FROM books WHERE available>0 ORDER BY title")
-        bv=[]
-        for i,code,title,av in c.fetchall():
-            x=code+" - "+title+" (Còn "+str(av)+")"; self.bmap[x]=i; bv.append(x)
-        self.bc["values"]=bv
-        if bv:self.bc.current(0)
+        c = self.db.conn.cursor()
 
-    def do_borrow(self):
-        if (self.rc is not None and not self.rc.get()) or not self.bc.get():
-            messagebox.showwarning("Mượn", "Hãy chọn độc giả và sách.")
+        # Tải danh sách độc giả
+        if self.rc is not None:
+            self.rmap = {}
+
+            c.execute(
+                "SELECT id, code, name FROM readers ORDER BY name"
+            )
+
+            rv = []
+            for i, code, name in c.fetchall():
+                display_name = code + " - " + name
+                self.rmap[display_name] = i
+                rv.append(display_name)
+
+            self.rc["values"] = rv
+
+            if rv:
+                self.rc.current(0)
+            else:
+                self.rc.set("")
+
+        # Tải danh sách sách còn khả dụng
+        self.bmap = {}
+
+        c.execute("""
+            SELECT id, code, title, available
+            FROM books
+            WHERE available > 0
+            ORDER BY title
+        """)
+
+        bv = []
+
+        for i, code, title, av in c.fetchall():
+            display_name = (
+                code + " - " + title
+                + " (Còn " + str(av) + ")"
+            )
+
+            self.bmap[display_name] = i
+            bv.append(display_name)
+
+        self.bc["values"] = bv
+
+        if bv:
+            self.bc.current(0)
+        else:
+            self.bc.set("")
+    
+    def add_borrow_book(self):
+        book_name = self.borrow_b.get().strip()
+
+        if not book_name:
+            messagebox.showwarning(
+                "Chưa chọn sách",
+                "Vui lòng chọn một cuốn sách trước."
+            )
             return
 
+        # Tránh thêm trùng một cuốn sách
+        if any(
+            item["name"] == book_name
+            for item in self.borrow_selected_books
+        ):
+            messagebox.showwarning(
+                "Sách đã được chọn",
+                "Cuốn sách này đã có trong danh sách mượn."
+            )
+            return
+
+        # Lấy mã sách từ bản đồ do load_borrow tạo
+        book_id = self.bmap.get(book_name)
+
+        if book_id is None:
+            messagebox.showerror(
+                "Lỗi dữ liệu",
+                "Không tìm thấy mã sách. Vui lòng tải lại trang."
+            )
+            return
+
+        self.borrow_selected_books.append({
+            "id": book_id,
+            "name": book_name
+        })
+
+        self.borrow_book_list.insert(
+            tk.END, book_name
+        )
+        if hasattr(self, "borrow_count_label"):
+            self.borrow_count_label.config(
+                text="{} cuốn".format(len(self.borrow_selected_books))
+            )
+
+        self.borrow_b.set("")
+
+    def remove_borrow_book(self):
+        selection = self.borrow_book_list.curselection()
+
+        if not selection:
+            messagebox.showinfo(
+                "Chưa chọn sách",
+                "Hãy chọn sách trong danh sách muốn xóa."
+            )
+            return
+
+        index = selection[0]
+
+        self.borrow_book_list.delete(index)
+        del self.borrow_selected_books[index]
+        if hasattr(self, "borrow_count_label"):
+            self.borrow_count_label.config(
+                text="{} cuốn".format(len(self.borrow_selected_books))
+            )
+    
+    def do_borrow(self):
+        # Kiểm tra độc giả
+        if self.role != "User" and not self.rc.get():
+            messagebox.showwarning(
+                "Mượn", "Hãy chọn độc giả."
+            )
+            return
+
+        # Kiểm tra danh sách sách
+        if not getattr(self, "borrow_selected_books", []):
+            messagebox.showwarning(
+                "Mượn", "Hãy thêm ít nhất một cuốn sách."
+            )
+            return
+
+        # Kiểm tra thời hạn mượn
         try:
             days = int(self.days.get())
-            assert days > 0
-        except:
-            messagebox.showerror("Mượn", "Số ngày không hợp lệ.")
+            if days <= 0:
+                raise ValueError
+        except (ValueError, TypeError):
+            messagebox.showerror(
+                "Mượn", "Số ngày không hợp lệ."
+            )
             return
 
         c = self.db.conn.cursor()
-        bid = self.bmap[self.bc.get()]
-        rid = self.my_reader_id() if self.role == "User" else self.rmap[self.rc.get()]
+
+        rid = (
+            self.my_reader_id()
+            if self.role == "User"
+            else self.rmap[self.rc.get()]
+        )
 
         today = datetime.now().date()
         due = today + timedelta(days=days)
 
-        c.execute(
-            """INSERT INTO borrowings
-               (book_id, reader_id, borrow_date, due_date,
-                return_date, fine, status)
-               VALUES (?, ?, ?, ?, ?, ?, ?)""",
-            (bid, rid, str(today), str(due), "", 0, "Borrowing")
+        # Tạo mã phiếu dùng chung cho tất cả sách trong lần mượn này
+        loan_code = "PM-" + today.strftime("%Y%m%d-%H%M%S-%f")
+
+        try:
+            c.execute("BEGIN")
+
+            # Kiểm tra từng cuốn còn trong kho trước khi lưu
+            for book in self.borrow_selected_books:
+                c.execute(
+                    "SELECT available FROM books WHERE id = ?",
+                    (book["id"],)
+                )
+                row = c.fetchone()
+
+                if row is None or row[0] is None or row[0] < 1:
+                    raise ValueError(
+                        "Sách '{}' đã hết hoặc không còn khả dụng."
+                        .format(book["name"])
+                    )
+
+            # Lưu từng cuốn sách, dùng chung mã phiếu
+            borrow_ids = []
+
+            for book in self.borrow_selected_books:
+                c.execute(
+                    """
+                    INSERT INTO borrowings
+                    (book_id, reader_id, borrow_date, due_date,
+                     return_date, fine, status, loan_code)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    (
+                        book["id"], rid, str(today), str(due),
+                        "", 0, "Borrowing", loan_code
+                    )
+                )
+
+                borrow_ids.append(c.lastrowid)
+
+                c.execute(
+                    """
+                    UPDATE books
+                    SET available = available - 1
+                    WHERE id = ? AND available > 0
+                    """,
+                    (book["id"],)
+                )
+
+                if c.rowcount != 1:
+                    raise ValueError(
+                        "Không thể cập nhật số lượng sách '{}'."
+                        .format(book["name"])
+                    )
+
+            self.db.conn.commit()
+
+        except Exception as e:
+            self.db.conn.rollback()
+            messagebox.showerror(
+                "Mượn sách",
+                "Không thể tạo phiếu mượn:\n{}".format(e)
+            )
+            return
+
+        # Chuẩn bị thông tin hiển thị
+        reader_name = (
+            self.rc.get()
+            if self.role != "User"
+            else str(rid)
         )
 
-        borrow_id = c.lastrowid
+        book_names = [
+            book["name"]
+            for book in self.borrow_selected_books
+        ]
 
-        c.execute(
-            "UPDATE books SET available = available - 1 WHERE id = ?",
-            (bid,)
+        book_name = "\n".join(
+            "- " + name for name in book_names
         )
 
-        self.db.conn.commit()
-
-        reader_name = self.rc.get() if self.role != "User" else str(rid)
-        book_name = self.bc.get()
-
+        # Dùng ID bản ghi đầu tiên để tương thích với hàm thông báo cũ
         self.show_borrow_success(
-            borrow_id,
+            loan_code,
             reader_name,
             book_name,
             today.strftime("%d/%m/%Y"),
@@ -3629,33 +3867,326 @@ class LibraryApp:
 
     # ---------------- LOAN MANAGEMENT ----------------
     def loans(self):
-        self.title("Quản lý phiếu mượn","Theo dõi tất cả phiếu mượn, trạng thái, hạn trả và tiền phạt.")
-        bar=tk.Frame(self.content,bg="white",highlightbackground=self.C["border"],highlightthickness=1)
-        bar.pack(fill="x",padx=28,pady=8)
-        tk.Label(bar,text="Trạng thái",bg="white",fg=self.C["muted"],font=("Segoe UI",9,"bold")).pack(side="left",padx=(15,5))
-        self.loan_filter=ttk.Combobox(bar,values=("Tất cả","Đang mượn","Chờ xác nhận","Đã trả","Quá hạn"),state="readonly",width=14)
-        self.loan_filter.current(0); self.loan_filter.pack(side="left",pady=9); self.loan_filter.bind("<<ComboboxSelected>>",lambda e:self.load_loans())
-        self.loan_search=tk.Entry(bar,width=35,font=("Segoe UI",10),relief="flat",bg="#F7F9FA")
-        self.loan_search.pack(side="left",fill="x",expand=True,padx=15,pady=8,ipady=6)
-        self.loan_search.bind("<KeyRelease>",lambda e:self.load_loans())
-        self.button(bar,"↻ Làm mới",self.loans,"gray",12).pack(side="right",padx=5)
-        wrap=tk.Frame(self.content,bg="white",highlightbackground=self.C["border"],highlightthickness=1); wrap.pack(fill="both",expand=True,padx=28,pady=8)
-        cols=("id","reader","book","borrow","due","return","fine","status")
-        self.lt=ttk.Treeview(wrap,columns=cols,show="headings")
-        heads=[("id","ID",45),("reader","Đọc giả",180),("book","Sách",230),("borrow","Ngày mượn",100),("due","Hạn trả",100),("return","Ngày trả",100),("fine","Tiền phạt",110),("status","Trạng thái",110)]
-        for col,h,w in heads:self.lt.heading(col,text=h);self.lt.column(col,width=w)
-        sb=ttk.Scrollbar(wrap,orient="vertical",command=self.lt.yview);self.lt.configure(yscrollcommand=sb.set)
-        self.lt.pack(side="left",fill="both",expand=True);sb.pack(side="right",fill="y")
-        b=tk.Frame(self.content,bg=self.C["bg"]);b.pack(fill="x",padx=28,pady=10)
-        self.button(b,"TRẢ PHIẾU ĐÃ CHỌN",self.return_selected_loan,"blue",20).pack(side="left")
-        self.button(b,"XÓA PHIẾU ĐÃ TRẢ",self.delete_returned_loan,"red",19).pack(side="left",padx=8)
+        self.title(
+            "Phiếu mượn",
+            "Quản lý phiếu mượn, theo dõi hạn trả và tình trạng sách."
+        )
+
+        bg = self.C["bg"]
+        dark = self.C["dark"]
+        muted = self.C["muted"]
+        border = self.C["border"]
+
+        page = tk.Frame(self.content, bg=bg)
+        page.pack(fill="both", expand=True, padx=24, pady=10)
+
+        # ===== THỐNG KÊ NHANH =====
+        today = datetime.now().date().isoformat()
+        cur = self.db.conn.cursor()
+
+        stats_data = [
+            (
+                "TỔNG PHIẾU",
+                "SELECT COUNT(*) FROM borrowings",
+                (),
+                "#2563EB"
+            ),
+            (
+                "ĐANG MƯỢN",
+                "SELECT COUNT(*) FROM borrowings "
+                "WHERE status='Borrowing' AND due_date>=?",
+                (today,),
+                "#16845B"
+            ),
+            (
+                "QUÁ HẠN",
+                "SELECT COUNT(*) FROM borrowings "
+                "WHERE status='Borrowing' AND due_date<?",
+                (today,),
+                "#DC4444"
+            ),
+            (
+                "CHỜ XÁC NHẬN",
+                "SELECT COUNT(*) FROM borrowings "
+                "WHERE status='PendingReturn'",
+                (),
+                "#D18A16"
+            ),
+        ]
+
+        stats = tk.Frame(page, bg=bg)
+        stats.pack(fill="x", pady=(0, 12))
+
+        for i, (label, sql, params, color) in enumerate(stats_data):
+            cur.execute(sql, params)
+            count = cur.fetchone()[0]
+
+            card = tk.Frame(
+                stats,
+                bg="white",
+                highlightthickness=1,
+                highlightbackground=border
+            )
+            card.grid(
+                row=0,
+                column=i,
+                sticky="nsew",
+                padx=(0 if i == 0 else 6, 0 if i == 3 else 6)
+            )
+            stats.grid_columnconfigure(
+                i, weight=1, uniform="loan_cards"
+            )
+
+            tk.Frame(
+                card,
+                bg=color,
+                height=4
+            ).pack(fill="x")
+
+            tk.Label(
+                card,
+                text=label,
+                bg="white",
+                fg=muted,
+                font=("Segoe UI", 9, "bold")
+            ).pack(anchor="w", padx=15, pady=(13, 3))
+
+            tk.Label(
+                card,
+                text=f"{count:,}",
+                bg="white",
+                fg=color,
+                font=("Segoe UI", 23, "bold")
+            ).pack(anchor="w", padx=15, pady=(0, 13))
+
+        # ===== THANH TÌM KIẾM VÀ LỌC =====
+        toolbar = tk.Frame(
+            page,
+            bg="white",
+            highlightthickness=1,
+            highlightbackground=border
+        )
+        toolbar.pack(fill="x", pady=(0, 10))
+
+        # Tìm kiếm được đặt trước để người dùng thao tác nhanh; bộ lọc nằm bên phải.
+        self.loan_search = tk.Entry(
+            toolbar,
+            font=("Segoe UI", 10),
+            relief="flat",
+            bg="#F1F5F9",
+            fg=dark
+        )
+        self.loan_search.pack(
+            side="left",
+            fill="x",
+            expand=True,
+            padx=(14, 10),
+            pady=9,
+            ipady=8
+        )
+
+        self.loan_search.insert(
+            0,
+            "Tìm theo tên độc giả hoặc tên sách..."
+        )
+        self.loan_search.bind(
+            "<FocusIn>",
+            lambda e: self._loan_search_hint(True)
+        )
+        self.loan_search.bind(
+            "<FocusOut>",
+            lambda e: self._loan_search_hint(False)
+        )
+        self.loan_search.bind(
+            "<KeyRelease>",
+            lambda e: self.load_loans()
+        )
+
+        self.loan_filter = ttk.Combobox(
+            toolbar,
+            values=(
+                "Tất cả",
+                "Đang mượn",
+                "Chờ xác nhận",
+                "Đã trả",
+                "Quá hạn"
+            ),
+            state="readonly",
+            width=16,
+            font=("Segoe UI", 10)
+        )
+        self.loan_filter.current(0)
+        self.loan_filter.pack(side="right", padx=(0, 12), pady=9, ipady=3)
+        self.loan_filter.bind(
+            "<<ComboboxSelected>>",
+            lambda e: self.load_loans()
+        )
+
+        self.button(
+            toolbar,
+            "↻ Làm mới",
+            self.loans,
+            "gray",
+            12
+        ).pack(side="right", padx=10, pady=6)
+
+        # ===== BẢNG PHIẾU MƯỢN =====
+        table = tk.Frame(
+            page,
+            bg="white",
+            highlightthickness=1,
+            highlightbackground=border
+        )
+        table.pack(fill="both", expand=True, pady=(0, 2))
+
+        table_heading = tk.Frame(table, bg="white")
+        table_heading.pack(fill="x", padx=16, pady=(12, 4))
+        tk.Label(
+            table_heading,
+            text="DANH SÁCH PHIẾU MƯỢN",
+            bg="white",
+            fg=dark,
+            font=("Segoe UI", 11, "bold")
+        ).pack(side="left")
+        tk.Label(
+            table_heading,
+            text="Chọn một phiếu để xem hoặc xử lý",
+            bg="white",
+            fg=muted,
+            font=("Segoe UI", 9)
+        ).pack(side="right")
+
+        columns = (
+            "id",
+            "reader",
+            "book",
+            "borrow",
+            "due",
+            "return",
+            "fine",
+            "status"
+        )
+
+        table_body = tk.Frame(table, bg="white")
+        table_body.pack(fill="both", expand=True, padx=10, pady=(0, 10))
+
+        self.lt = ttk.Treeview(
+            table_body,
+            columns=columns,
+            show="headings",
+            selectmode="browse"
+        )
+
+        headers = [
+            ("id", "Mã phiếu", 75),
+            ("reader", "Độc giả", 170),
+            ("book", "Tên sách", 230),
+            ("borrow", "Ngày mượn", 105),
+            ("due", "Hạn trả", 105),
+            ("return", "Ngày trả", 105),
+            ("fine", "Tiền phạt", 120),
+            ("status", "Trạng thái", 125),
+        ]
+
+        for col, heading, width in headers:
+            self.lt.heading(col, text=heading)
+            self.lt.column(
+                col,
+                width=width,
+                minwidth=60,
+                anchor="w" if col in ("reader", "book") else "center"
+            )
+
+        self.lt.tag_configure(
+            "late",
+            foreground="#C62828"
+        )
+        self.lt.tag_configure(
+            "pending",
+            foreground="#B7791F"
+        )
+        self.lt.tag_configure(
+            "returned",
+            foreground="#64748B"
+        )
+
+        sy = ttk.Scrollbar(
+            table_body,
+            orient="vertical",
+            command=self.lt.yview
+        )
+        sx = ttk.Scrollbar(
+            table_body,
+            orient="horizontal",
+            command=self.lt.xview
+        )
+
+        self.lt.configure(
+            yscrollcommand=sy.set,
+            xscrollcommand=sx.set
+        )
+
+        self.lt.grid(row=0, column=0, sticky="nsew")
+        sy.grid(row=0, column=1, sticky="ns")
+        sx.grid(row=1, column=0, sticky="ew")
+
+        table_body.grid_rowconfigure(0, weight=1)
+        table_body.grid_columnconfigure(0, weight=1)
+
+        # ===== CÁC THAO TÁC =====
+        actions = tk.Frame(page, bg=bg)
+        actions.pack(fill="x", pady=(12, 0))
+
+        self.button(
+            actions,
+            "✓  Trả phiếu đã chọn",
+            self.return_selected_loan,
+            "blue",
+            22
+        ).pack(side="left")
+
+        self.button(
+            actions,
+            "Xóa phiếu đã trả",
+            self.delete_returned_loan,
+            "red",
+            19
+        ).pack(side="left", padx=8)
+
+        tk.Label(
+            actions,
+            text="Chọn một dòng để thao tác",
+            bg=bg,
+            fg=muted,
+            font=("Segoe UI", 9)
+        ).pack(side="right")
+
         self.load_loans()
+
+    def _loan_search_hint(self, focused):
+        hint = "Tìm theo tên độc giả hoặc tên sách..."
+
+        if not hasattr(self, "loan_search"):
+            return
+
+        if focused and self.loan_search.get() == hint:
+            self.loan_search.delete(0, tk.END)
+
+        elif not focused and not self.loan_search.get().strip():
+            self.loan_search.insert(0, hint)
 
     def load_loans(self):
         if not hasattr(self,"lt"): return
         for x in self.lt.get_children():self.lt.delete(x)
         filt=self.loan_filter.get() if hasattr(self,"loan_filter") else "Tất cả"
-        key=self.loan_search.get().strip() if hasattr(self,"loan_search") else ""
+        key = (
+            self.loan_search.get().strip()
+            if hasattr(self, "loan_search")
+            else ""
+        )
+
+        if key == "Tìm theo tên độc giả hoặc tên sách...":
+            key = ""
         c=self.db.conn.cursor(); c.execute("""SELECT b.id,r.name,bo.title,b.borrow_date,b.due_date,b.return_date,b.fine,b.status
                      FROM borrowings b JOIN readers r ON r.id=b.reader_id JOIN books bo ON bo.id=b.book_id ORDER BY b.id DESC""")
         today=datetime.now().date()
@@ -3717,11 +4248,11 @@ class LibraryApp:
 
         # Khung tổng thể
         page = tk.Frame(self.content, bg=bg)
-        page.pack(fill="both", expand=True, padx=28, pady=(5, 12))
+        page.pack(fill="both", expand=True, padx=18, pady=(6, 8))
 
         # Ba ô có thể bấm như tab
         cards = tk.Frame(page, bg=bg)
-        cards.pack(fill="x", pady=(0, 12))
+        cards.pack(fill="x", pady=(0, 8))
 
         content = tk.Frame(page, bg=bg)
         content.pack(fill="both", expand=True)
@@ -3852,7 +4383,7 @@ class LibraryApp:
             area.pack(fill="both", expand=True)
 
             table_area = tk.Frame(area, bg="white")
-            table_area.pack(fill="both", expand=True, padx=8, pady=8)
+            table_area.pack(fill="both", expand=True, padx=10, pady=10)
 
             tree = ttk.Treeview(
                 table_area, columns=columns, show="headings",
@@ -4175,29 +4706,276 @@ class LibraryApp:
             "Đã từ chối {} phiếu trả sách.".format(rejected)
         )
 
+    
     def returns_user(self):
-        self.title("Trả sách","Sách bạn đã mượn. Yêu cầu trả sách sẽ được Admin xác nhận.")
-        wrap=tk.Frame(self.content,bg="white"); wrap.pack(fill="both",expand=True,padx=28,pady=10)
-        self.tret=ttk.Treeview(wrap,columns=("id","book","borrow","due","ret","status"),show="headings")
-        for col,h,w in [("id","ID",45),("book","Sách",260),("borrow","Ngày mượn",100),("due","Hạn trả",100),
-                        ("ret","Ngày trả",100),("status","Trạng thái",160)]:
-            self.tret.heading(col,text=h); self.tret.column(col,width=w)
-        self.tret.tag_configure("pending",foreground=self.C["orange"])
-        self.tret.tag_configure("done",foreground="#A0AEC0")
-        self.tret.pack(fill="both",expand=True)
-        b=tk.Frame(self.content,bg=self.C["bg"]); b.pack(fill="x",padx=28,pady=10)
-        self.button(b,"GỬI YÊU CẦU TRẢ SÁCH",self.request_return,width=26).pack(side="left")
-        c=self.db.conn.cursor(); today=datetime.now().date()
-        c.execute("""SELECT b.id,bo.title,b.borrow_date,b.due_date,b.return_date,b.status FROM borrowings b
-                     JOIN books bo ON bo.id=b.book_id WHERE b.reader_id=? ORDER BY b.id DESC""",(self.my_reader_id(),))
-        for bid,title,bd,due,ret,st in c.fetchall():
-            if st=="Returned": disp,tag="Đã trả","done"
-            elif st=="PendingReturn": disp,tag="Chờ Admin xác nhận","pending"
-            else:
-                late=(today-datetime.strptime(due,"%Y-%m-%d").date()).days
-                disp,tag=("Quá hạn {} ngày".format(late) if late>0 else "Đang mượn"),""
-            self.tret.insert("","end",iid=str(bid),values=(bid,title,self.fd(bd),self.fd(due),self.fd(ret) if ret else "-",disp),
-                             tags=((tag,) if tag else ()))
+        self.title(
+            "Trả sách",
+            "Theo dõi sách đã mượn và gửi yêu cầu trả sách"
+        )
+
+        # ===== KHUNG CHÍNH =====
+        wrap = tk.Frame(self.content, bg=self.C["bg"])
+        wrap.pack(fill="both", expand=True, padx=18, pady=6)
+
+        # ===== THỐNG KÊ =====
+        stats = tk.Frame(wrap, bg=self.C["bg"])
+        stats.pack(fill="x", pady=(0, 8))
+
+        card_data = [
+            ("total", "TỔNG PHIẾU", "#3182CE"),
+            ("borrowing", "ĐANG MƯỢN", "#2B6CB0"),
+            ("pending", "CHỜ XÁC NHẬN", "#DD6B20"),
+            ("returned", "ĐÃ TRẢ", "#38A169"),
+        ]
+
+        c = self.db.conn.cursor()
+        c.execute("""
+            SELECT status, COUNT(*)
+            FROM borrowings
+            WHERE reader_id = ?
+            GROUP BY status
+        """, (self.my_reader_id(),))
+
+        counts = dict(c.fetchall())
+        total = sum(counts.values())
+
+        values = [
+            total,
+            counts.get("Borrowing", 0),
+            counts.get("PendingReturn", 0),
+            counts.get("Returned", 0),
+        ]
+
+        for i, (key, label, color) in enumerate(card_data):
+            card = tk.Frame(
+                stats, bg="white",
+                highlightbackground="#E2E8F0",
+                highlightthickness=1
+            )
+            card.pack(
+                side="left", fill="both", expand=True,
+                padx=(0 if i == 0 else 8, 0)
+            )
+
+            tk.Frame(card, bg=color, height=4).pack(fill="x")
+
+            tk.Label(
+                card, text=label, bg="white",
+                fg="#718096", font=("Arial", 9, "bold")
+            ).pack(anchor="w", padx=14, pady=(12, 4))
+
+            tk.Label(
+                card, text=str(values[i]), bg="white",
+                fg=color, font=("Arial", 22, "bold")
+            ).pack(anchor="w", padx=14, pady=(0, 12))
+
+        # ===== THANH TÌM KIẾM VÀ LỌC =====
+        toolbar = tk.Frame(wrap, bg="white")
+        toolbar.pack(fill="x", pady=(0, 8))
+
+        search_var = tk.StringVar()
+        filter_var = tk.StringVar(value="Tất cả")
+
+        search_entry = tk.Entry(
+            toolbar, textvariable=search_var,
+            font=("Arial", 10), relief="solid",
+            bd=1, fg="#4A5568"
+        )
+        search_entry.pack(
+            side="left", fill="x", expand=True,
+            padx=12, pady=12, ipady=6
+        )
+
+        search_entry.insert(0, "Tìm theo tên sách hoặc ID phiếu...")
+        search_entry.config(fg="#A0AEC0")
+
+        def on_focus_in(event):
+            if search_entry.get() == "Tìm theo tên sách hoặc ID phiếu...":
+                search_entry.delete(0, "end")
+                search_entry.config(fg="#2D3748")
+
+        def on_focus_out(event):
+            if not search_entry.get().strip():
+                search_entry.insert(
+                    0, "Tìm theo tên sách hoặc ID phiếu..."
+                )
+                search_entry.config(fg="#A0AEC0")
+
+        search_entry.bind("<FocusIn>", on_focus_in)
+        search_entry.bind("<FocusOut>", on_focus_out)
+
+        filter_box = ttk.Combobox(
+            toolbar, textvariable=filter_var,
+            state="readonly", width=20,
+            values=[
+                "Tất cả",
+                "Đang mượn",
+                "Chờ Admin xác nhận",
+                "Đã trả",
+                "Quá hạn",
+            ]
+        )
+        filter_box.pack(side="right", padx=12, pady=12, ipady=4)
+
+        # ===== BẢNG PHIẾU MƯỢN =====
+        table_card = tk.Frame(
+            wrap, bg="white",
+            highlightbackground="#E2E8F0",
+            highlightthickness=1
+        )
+        table_card.pack(fill="both", expand=True)
+
+        tk.Label(
+            table_card, text="DANH SÁCH SÁCH ĐÃ MƯỢN",
+            bg="white", fg="#2D3748",
+            font=("Arial", 11, "bold")
+        ).pack(anchor="w", padx=16, pady=(14, 10))
+
+        table_wrap = tk.Frame(table_card, bg="white")
+        table_wrap.pack(fill="both", expand=True, padx=12, pady=(0, 12))
+
+        columns = ("id", "book", "borrow", "due", "ret", "status")
+        self.tret = ttk.Treeview(
+            table_wrap, columns=columns,
+            show="headings", selectmode="browse"
+        )
+
+        headings = [
+            ("id", "Mã phiếu", 75),
+            ("book", "Tên sách", 260),
+            ("borrow", "Ngày mượn", 110),
+            ("due", "Hạn trả", 110),
+            ("ret", "Ngày trả", 110),
+            ("status", "Trạng thái", 190),
+        ]
+
+        for col, heading, width in headings:
+            self.tret.heading(col, text=heading)
+            self.tret.column(
+                col, width=width,
+                minwidth=55 if col == "id" else 80,
+                anchor="center" if col != "book" else "w",
+                stretch=True
+            )
+
+        self.tret.tag_configure(
+            "pending", foreground="#C05621",
+            background="#FFFAF0"
+        )
+        self.tret.tag_configure(
+            "done", foreground="#718096"
+        )
+        self.tret.tag_configure(
+            "late", foreground="#C53030",
+            background="#FFF5F5"
+        )
+        self.tret.tag_configure(
+            "borrowing", foreground="#2B6CB0"
+        )
+
+        scrollbar = ttk.Scrollbar(
+            table_wrap, orient="vertical",
+            command=self.tret.yview
+        )
+        self.tret.configure(yscrollcommand=scrollbar.set)
+
+        self.tret.pack(side="left", fill="both", expand=True)
+        scrollbar.pack(side="right", fill="y")
+
+        # ===== NẠP VÀ LỌC DỮ LIỆU =====
+        today = datetime.now().date()
+
+        c.execute("""
+            SELECT b.id, bo.title, b.borrow_date,
+                   b.due_date, b.return_date, b.status
+            FROM borrowings b
+            JOIN books bo ON bo.id = b.book_id
+            WHERE b.reader_id = ?
+            ORDER BY b.id DESC
+        """, (self.my_reader_id(),))
+
+        rows = c.fetchall()
+
+        def refresh_table(*args):
+            keyword = search_var.get().strip().lower()
+            if keyword == "tìm theo tên sách hoặc id phiếu...":
+                keyword = ""
+
+            selected_filter = filter_var.get()
+
+            for item in self.tret.get_children():
+                self.tret.delete(item)
+
+            for bid, title, bd, due, ret, st in rows:
+                try:
+                    due_date = datetime.strptime(
+                        due, "%Y-%m-%d"
+                    ).date()
+                    late_days = (today - due_date).days
+                except (ValueError, TypeError):
+                    late_days = 0
+
+                if st == "Returned":
+                    display_status = "Đã trả"
+                    tag = "done"
+                    category = "Đã trả"
+                elif st == "PendingReturn":
+                    display_status = "Chờ Admin xác nhận"
+                    tag = "pending"
+                    category = "Chờ Admin xác nhận"
+                elif late_days > 0:
+                    display_status = "Quá hạn {} ngày".format(late_days)
+                    tag = "late"
+                    category = "Quá hạn"
+                else:
+                    display_status = "Đang mượn"
+                    tag = "borrowing"
+                    category = "Đang mượn"
+
+                if selected_filter != "Tất cả":
+                    if selected_filter == "Quá hạn":
+                        if category != "Quá hạn":
+                            continue
+                    elif category != selected_filter:
+                        continue
+
+                if keyword and keyword not in str(bid).lower() \
+                        and keyword not in str(title).lower():
+                    continue
+
+                self.tret.insert(
+                    "", "end", iid=str(bid),
+                    values=(
+                        bid, title, self.fd(bd), self.fd(due),
+                        self.fd(ret) if ret else "-",
+                        display_status
+                    ),
+                    tags=(tag,)
+                )
+
+        search_var.trace_add("write", refresh_table)
+        filter_var.trace_add("write", refresh_table)
+        filter_box.bind("<<ComboboxSelected>>", refresh_table)
+
+        refresh_table()
+
+        # ===== NÚT THAO TÁC =====
+        bottom = tk.Frame(wrap, bg=self.C["bg"])
+        bottom.pack(fill="x", pady=(8, 0))
+
+        tk.Label(
+            bottom,
+            text="Chọn phiếu sách đang mượn để gửi yêu cầu trả.",
+            bg=self.C["bg"], fg="#718096",
+            font=("Arial", 9)
+        ).pack(side="left", pady=8)
+
+        self.button(
+            bottom,
+            "GỬI YÊU CẦU TRẢ SÁCH",
+            self.request_return,
+            width=26
+        ).pack(side="right")
 
     def request_return(self):
         s=self.tret.selection()
@@ -4322,26 +5100,257 @@ class LibraryApp:
         )
 
     def overdue(self):
-        self.title("Sách quá hạn","Những phiếu đang mượn đã vượt quá hạn trả.")
-        wrap=tk.Frame(self.content,bg="white"); wrap.pack(fill="both",expand=True,padx=28,pady=10)
-        t=ttk.Treeview(wrap,columns=("id","reader","phone","book","due","late","fine"),show="headings")
-        for col,h,w in [("id","ID",45),("reader","Đọc giả",170),("phone","SĐT",120),("book","Sách",230),
-                        ("due","Hạn trả",100),("late","Số ngày",80),("fine","Tiền phạt",120)]:
-            t.heading(col,text=h); t.column(col,width=w)
-        t.pack(fill="both",expand=True)
-        c=self.db.conn.cursor()
-        c.execute("""SELECT b.id,r.name,r.phone,bo.title,b.due_date FROM borrowings b
-                     JOIN readers r ON r.id=b.reader_id JOIN books bo ON bo.id=b.book_id
-                     WHERE b.status='Borrowing'""")
-        today=datetime.now().date(); count=0
-        for r in c.fetchall():
-            late=(today-datetime.strptime(r[4],"%Y-%m-%d").date()).days
-            if late>0:
-                count+=1; t.insert("", "end",values=(r[0],r[1],r[2],r[3],self.fd(r[4]),late,
-                                                      "{:,} VNĐ".format(late*FINE_PER_DAY)))
-        if count==0:
-            tk.Label(self.content,text="✓  Hiện tại không có sách quá hạn.",bg=self.C["bg"],
-                     fg=self.C["green"],font=("Segoe UI",13,"bold")).pack(pady=15)
+        self.title(
+            "Sách quá hạn",
+            "Theo dõi các phiếu chưa trả và đã vượt hạn trả."
+        )
+
+        bg = self.C["bg"]
+        dark = self.C["dark"]
+        muted = self.C["muted"]
+        border = self.C["border"]
+
+        page = tk.Frame(self.content, bg=bg)
+        page.pack(fill="both", expand=True, padx=24, pady=10)
+
+        today = datetime.now().date()
+        cur = self.db.conn.cursor()
+
+        cur.execute("""
+            SELECT
+                b.id,
+                r.name,
+                r.phone,
+                bo.title,
+                b.borrow_date,
+                b.due_date
+            FROM borrowings b
+            JOIN readers r ON r.id = b.reader_id
+            JOIN books bo ON bo.id = b.book_id
+            WHERE b.status = 'Borrowing'
+            ORDER BY b.due_date ASC
+        """)
+
+        data = []
+
+        for bid, reader, phone, book, borrow, due in cur.fetchall():
+            due_date = datetime.strptime(
+                due, "%Y-%m-%d"
+            ).date()
+
+            late_days = (today - due_date).days
+
+            if late_days > 0:
+                data.append((
+                    bid,
+                    reader,
+                    phone or "-",
+                    book,
+                    borrow,
+                    due,
+                    late_days,
+                    late_days * FINE_PER_DAY
+                ))
+
+        total_fine = sum(row[7] for row in data)
+
+        # ===== THẺ CẢNH BÁO =====
+        alert = tk.Frame(
+            page,
+            bg="#FFF1F0",
+            highlightthickness=1,
+            highlightbackground="#F2CECA"
+        )
+        alert.pack(fill="x", pady=(0, 10))
+
+        tk.Label(
+            alert,
+            text="!",
+            bg="#FADBD8",
+            fg="#B42318",
+            font=("Segoe UI", 24, "bold"),
+            width=3
+        ).pack(side="left", padx=16, pady=14, ipady=4)
+
+        info = tk.Frame(alert, bg="#FFF1F0")
+        info.pack(
+            side="left",
+            fill="x",
+            expand=True,
+            pady=14
+        )
+
+        tk.Label(
+            info,
+            text="CẦN ƯU TIÊN XỬ LÝ",
+            bg="#FFF1F0",
+            fg="#B42318",
+            font=("Segoe UI", 9, "bold")
+        ).pack(anchor="w")
+
+        tk.Label(
+            info,
+            text=f"{len(data)} phiếu quá hạn",
+            bg="#FFF1F0",
+            fg=dark,
+            font=("Segoe UI", 18, "bold")
+        ).pack(anchor="w", pady=(3, 0))
+
+        tk.Label(
+            alert,
+            text=f"Tiền phạt tạm tính\n{total_fine:,} VNĐ",
+            bg="#FFF1F0",
+            fg="#B42318",
+            font=("Segoe UI", 11, "bold"),
+            justify="right"
+        ).pack(side="right", padx=22)
+
+        # ===== THANH TÌM KIẾM =====
+        toolbar = tk.Frame(
+            page,
+            bg="white",
+            highlightthickness=1,
+            highlightbackground=border
+        )
+        toolbar.pack(fill="x", pady=(0, 10))
+
+        tk.Label(
+            toolbar,
+            text="Tìm kiếm",
+            bg="white",
+            fg=muted,
+            font=("Segoe UI", 10, "bold")
+        ).pack(side="left", padx=(14, 10), pady=12)
+
+        search = tk.Entry(
+            toolbar,
+            font=("Segoe UI", 10),
+            relief="flat",
+            bg="#F1F5F9",
+            fg=dark
+        )
+        search.pack(
+            side="left",
+            fill="x",
+            expand=True,
+            padx=(0, 14),
+            pady=9,
+            ipady=7
+        )
+
+        # ===== BẢNG SÁCH QUÁ HẠN =====
+        table = tk.Frame(
+            page,
+            bg="white",
+            highlightthickness=1,
+            highlightbackground=border
+        )
+        table.pack(fill="both", expand=True, pady=(0, 2))
+
+        columns = (
+            "id",
+            "reader",
+            "phone",
+            "book",
+            "borrow",
+            "due",
+            "late",
+            "fine"
+        )
+
+        tree = ttk.Treeview(
+            table,
+            columns=columns,
+            show="headings",
+            selectmode="browse"
+        )
+
+        headers = [
+            ("id", "Mã phiếu", 75),
+            ("reader", "Độc giả", 165),
+            ("phone", "Số điện thoại", 125),
+            ("book", "Tên sách", 230),
+            ("borrow", "Ngày mượn", 105),
+            ("due", "Hạn trả", 105),
+            ("late", "Quá hạn (ngày)", 115),
+            ("fine", "Phạt tạm tính", 130),
+        ]
+
+        for col, heading, width in headers:
+            tree.heading(col, text=heading)
+            tree.column(
+                col,
+                width=width,
+                minwidth=60,
+                anchor="w" if col in ("reader", "book") else "center"
+            )
+
+        tree.tag_configure(
+            "late",
+            foreground="#C62828"
+        )
+
+        sy = ttk.Scrollbar(
+            table,
+            orient="vertical",
+            command=tree.yview
+        )
+        sx = ttk.Scrollbar(
+            table,
+            orient="horizontal",
+            command=tree.xview
+        )
+
+        tree.configure(
+            yscrollcommand=sy.set,
+            xscrollcommand=sx.set
+        )
+
+        tree.grid(row=0, column=0, sticky="nsew")
+        sy.grid(row=0, column=1, sticky="ns")
+        sx.grid(row=1, column=0, sticky="ew")
+
+        table.grid_rowconfigure(0, weight=1)
+        table.grid_columnconfigure(0, weight=1)
+
+        def refresh_table(event=None):
+            keyword = strip_accents(
+                search.get().strip()
+            ).lower()
+
+            for item in tree.get_children():
+                tree.delete(item)
+
+            for (
+                bid, reader, phone, book,
+                borrow, due, late, fine
+            ) in data:
+
+                searchable = strip_accents(
+                    f"{bid} {reader} {phone} {book}"
+                ).lower()
+
+                if keyword and keyword not in searchable:
+                    continue
+
+                tree.insert(
+                    "",
+                    "end",
+                    values=(
+                        bid,
+                        reader,
+                        phone,
+                        book,
+                        self.fd(borrow),
+                        self.fd(due),
+                        late,
+                        f"{fine:,} VNĐ"
+                    ),
+                    tags=("late",)
+                )
+
+        search.bind("<KeyRelease>", refresh_table)
+        refresh_table()
 
     def choose_role(self,name,current):
         """Hop thoai chon vai tro: moi vai tro la mot nut bo cong. Tra ve vai tro duoc chon, hoac None neu dong/huy."""
