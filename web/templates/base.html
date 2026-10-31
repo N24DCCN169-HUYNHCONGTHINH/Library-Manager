@@ -1,0 +1,20 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}Thư viện{% endblock %}</title>
+  <style>
+    :root { color-scheme: light; font-family: "Segoe UI", sans-serif; color: #20304a; background: #f3f6fb; }
+    body { margin: 0; }
+    header { background: #18366f; color: white; padding: 1rem 5vw; }
+    main { max-width: 920px; margin: 3rem auto; padding: 0 1.25rem; }
+    .card { background: white; border: 1px solid #e0e7f0; border-radius: 14px; padding: 1.5rem; }
+    a { color: #1f5fb4; }
+  </style>
+</head>
+<body>
+  <header><strong>Hệ thống quản lý thư viện</strong></header>
+  <main>{% block content %}{% endblock %}</main>
+</body>
+</html>
