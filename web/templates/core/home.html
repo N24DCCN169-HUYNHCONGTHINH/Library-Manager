@@ -1,0 +1,10 @@
+{% extends "base.html" %}
+{% block title %}Bắt đầu · Quản lý thư viện{% endblock %}
+{% block content %}
+<section class="card">
+  <h1>Dự án web quản lý thư viện</h1>
+  <p>Bộ khung Django đã sẵn sàng. Nhóm có thể bắt đầu với đăng nhập, danh mục sách, độc giả và mượn trả.</p>
+  <p>Trạng thái ứng dụng: <a href="{% url 'health' %}">kiểm tra health</a></p>
+  <p><a href="/admin/">Khu vực quản trị Django</a> (cần tạo tài khoản quản trị).</p>
+</section>
+{% endblock %}
