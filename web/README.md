@@ -27,6 +27,13 @@ Mở http://127.0.0.1:8000/ . Trang `/health/` kiểm tra ứng dụng có phả
 
 Tạo tài khoản quản trị phát triển bằng `python manage.py createsuperuser`. Máy chủ `runserver` chỉ dành cho phát triển; không dùng làm máy chủ Internet chính thức.
 
+## Tính năng đang có
+
+- Quản lý danh mục sách trong Django Admin tại `/admin/` (thêm, sửa, xóa, tìm kiếm và lọc). Các trường gồm mã, tên, tác giả, thể loại, nhà xuất bản, năm/ấn bản, số bản, ảnh bìa và mô tả.
+- Không cho lưu số bản còn lớn hơn tổng số bản.
+
+Sau khi cập nhật mã nguồn, chạy `python manage.py migrate` để tạo bảng sách.
+
 ## PostgreSQL
 
 Dự án hỗ trợ cấu hình PostgreSQL qua `.env`. Cài PostgreSQL, tạo database và user riêng, rồi đặt `DB_ENGINE=postgres`, `DB_NAME`, `DB_USER`, `DB_PASSWORD`, `DB_HOST`, `DB_PORT`. Không commit `.env` hoặc mật khẩu lên GitHub.
