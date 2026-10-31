@@ -54,6 +54,8 @@ Tạo repository GitHub rỗng trước khi thêm `origin` (không chọn tạo 
 
 Xem [kế hoạch 13 ngày](docs/plan-13-ngay.md) và [quy ước cộng tác](CONTRIBUTING.md). Ưu tiên đăng nhập/phân quyền, danh mục, độc giả, mượn/trả và chuyển dữ liệu. Thanh toán trực tuyến chỉ làm sandbox nếu các luồng cốt lõi đã ổn định.
 
+Thành viên mới có thể làm theo [hướng dẫn cài đặt và cộng tác từ máy mới](docs/huong-dan-thanh-vien.md).
+
 ## Dữ liệu cũ
 
 Không đưa `library_manager.db`, dữ liệu độc giả, bản sao lưu hoặc mật khẩu thật lên GitHub. Dùng bản sao đã ẩn dữ liệu cá nhân để phát triển và đối chiếu dữ liệu thật chỉ trong môi trường được kiểm soát.
