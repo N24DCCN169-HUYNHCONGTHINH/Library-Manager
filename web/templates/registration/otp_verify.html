@@ -1,0 +1,3 @@
+{% extends "base.html" %}
+{% block title %}Xác minh đăng nhập · Quản lý thư viện{% endblock %}
+{% block content %}<section class="card"><h1>Xác minh đăng nhập</h1><p>Nhập mã 6 chữ số từ ứng dụng xác thực để vào khu vực nhân viên.</p><form method="post">{% csrf_token %}{{ form.as_p }}<button type="submit">Xác minh</button></form><form method="post" action="{% url 'logout' %}">{% csrf_token %}<button type="submit">Đăng xuất</button></form></section>{% endblock %}

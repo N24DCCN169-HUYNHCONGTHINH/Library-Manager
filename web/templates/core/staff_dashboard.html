@@ -1,0 +1,3 @@
+{% extends "base.html" %}
+{% block title %}Khu vực nhân viên · Quản lý thư viện{% endblock %}
+{% block content %}<section class="card"><h1>Khu vực nhân viên</h1><p>Vai trò được cấp: {{ library_roles.staff_roles|join:", " }}{% if user.is_superuser %}Quản trị khẩn cấp{% endif %}</p><p>Quyền nghiệp vụ được cấp riêng theo vai trò; quyền vào Django Admin cần bật Staff status.</p><p><a href="{% url 'library:catalog' %}">Tra cứu danh mục</a>{% if library_roles.can_circulate %} · <a href="{% url 'library:circulation_desk' %}">Quầy mượn/trả</a>{% endif %}{% if user.is_staff and library_roles.can_catalog %} · <a href="/admin/library/">Quản lý thư viện</a>{% endif %}</p></section>{% endblock %}

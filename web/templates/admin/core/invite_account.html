@@ -1,0 +1,5 @@
+{% extends "admin/base_site.html" %}
+{% block content %}
+  <p>Tài khoản sẽ ở trạng thái chờ cho đến khi người nhận xác nhận email và tự đặt mật khẩu. Độc giả mới vẫn cần nhân viên xác minh thẻ trước khi được mượn.</p>
+  <form method="post">{% csrf_token %}{{ form.as_p }}<button type="submit">Tạo và gửi lời mời</button></form>
+{% endblock %}

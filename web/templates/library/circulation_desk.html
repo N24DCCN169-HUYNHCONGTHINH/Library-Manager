@@ -1,0 +1,13 @@
+{% extends "base.html" %}
+{% block title %}Quầy mượn/trả · Quản lý thư viện{% endblock %}
+{% block content %}
+<section class="card"><h1>Quầy mượn/trả</h1>
+  <h2>Ghi nhận mượn</h2><form method="post">{% csrf_token %}<input type="hidden" name="action" value="checkout">{{ checkout_form.as_p }}<button type="submit">Xác nhận mượn</button></form>
+  <h2>Ghi nhận trả</h2><form method="post">{% csrf_token %}<input type="hidden" name="action" value="return">{{ return_form.as_p }}<button type="submit">Xác nhận trả</button></form>
+</section>
+<section class="card"><h2>Lượt đang mở</h2>{% for loan in loans %}<p>{{ loan.reader.reader_number }} · {{ loan.copy.book.title }} · {{ loan.copy.barcode }} · hạn {{ loan.due_at|date:"d/m/Y H:i" }}</p>{% empty %}<p>Không có lượt mượn đang mở.</p>{% endfor %}</section>
+<section class="card"><h2>Thu khoản phạt</h2>
+  {% for fine in unpaid_fines %}<p>#{{ fine.id }} · {{ fine.loan.reader.reader_number }} · {{ fine.loan.copy.book.title }} · còn {{ fine.balance }} ₫</p>{% empty %}<p>Không có khoản phạt đến hạn.</p>{% endfor %}
+  <form method="post">{% csrf_token %}<input type="hidden" name="action" value="payment">{{ payment_form.as_p }}<button type="submit">Ghi nhận thanh toán</button></form>
+</section>
+{% endblock %}

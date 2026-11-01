@@ -1,0 +1,12 @@
+{% extends "base.html" %}
+{% block title %}Thiết lập xác minh hai bước · Quản lý thư viện{% endblock %}
+{% block content %}
+<section class="card">
+  <h1>Thiết lập xác minh hai bước</h1>
+  <p>Quét mã bằng ứng dụng xác thực (ví dụ Microsoft Authenticator, Google Authenticator hoặc FreeOTP). Nếu không quét được, nhập khóa thủ công bên dưới.</p>
+  <p><strong>Khóa thiết lập:</strong> <code>{{ secret }}</code></p>
+  <p><a href="{{ otpauth_uri }}">Mở bằng ứng dụng xác thực</a></p>
+  <p>Nhập mã 6 chữ số đang hiển thị trong ứng dụng để xác nhận thiết lập. Chỉ sau khi xác nhận, quyền nhân viên mới được mở.</p>
+  <form method="post">{% csrf_token %}{{ form.as_p }}<button type="submit">Xác nhận và tiếp tục</button></form>
+</section>
+{% endblock %}

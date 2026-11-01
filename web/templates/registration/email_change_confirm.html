@@ -1,0 +1,3 @@
+{% extends "base.html" %}
+{% block title %}Xác nhận email mới{% endblock %}
+{% block content %}<section class="card"><h1>Xác nhận đổi email</h1><p>Để bảo vệ tài khoản, hãy đăng nhập đúng tài khoản đã yêu cầu đổi email rồi xác nhận tại đây.</p><form method="post">{% csrf_token %}{{ form.as_p }}<button type="submit">Xác nhận email mới</button></form></section>{% endblock %}

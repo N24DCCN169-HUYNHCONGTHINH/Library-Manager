@@ -1,0 +1,29 @@
+{% extends "base.html" %}
+{% block title %}Tra cứu danh mục · Quản lý thư viện{% endblock %}
+{% block content %}
+<section class="card">
+  <h1>Tra cứu danh mục</h1>
+  <form method="get">
+    <label for="q">Nhan đề, tác giả, ISBN, mã xếp giá hoặc mã bản sách</label>
+    <input id="q" name="q" value="{{ query }}">
+    <label for="branch">Cơ sở</label>
+    <select id="branch" name="branch">
+      <option value="">Tất cả cơ sở</option>
+      {% for branch in branches %}<option value="{{ branch.id }}"{% if selected_branch == branch.id|stringformat:"s" %} selected{% endif %}>{{ branch.name }}</option>{% endfor %}
+    </select>
+    <button type="submit">Tìm</button>
+  </form>
+  {% for book in books %}
+    <article class="list-item">
+      <h2>{{ book.title }}</h2>
+      <p>{{ book.authors|default:"Chưa có thông tin tác giả" }}{% if book.publication_year %} · {{ book.publication_year }}{% endif %} · {{ book.get_material_type_display }}</p>
+      <p>Mã: {{ book.catalog_number }}{% if book.isbn %} · ISBN {{ book.isbn }}{% endif %} · Bản sẵn sàng tại cơ sở đã chọn: {{ book.available_copies_count }}</p>
+      {% for copy in book.catalog_copies %}
+        {% if copy.status == "available" %}<p>Bản sẵn sàng · {{ copy.branch.name|default:"Chưa gán cơ sở" }}{% if copy.shelf_location %} · Kệ {{ copy.shelf_location }}{% endif %}</p>{% endif %}
+      {% endfor %}
+      {% if is_reader and selected_branch and book.available_copies_count == 0 and book.has_available_copies_anywhere %}<p>Có bản sẵn sàng tại cơ sở khác; hãy chọn “Tất cả cơ sở” để xem vị trí.</p>{% endif %}
+      {% if is_reader and not book.has_available_copies_anywhere and book.loan_mode == "home_loan" %}<form method="post" action="{% url 'library:reserve' book.id %}">{% csrf_token %}<button type="submit">Đặt trước</button></form>{% endif %}
+    </article>
+  {% empty %}<p>Không tìm thấy đầu sách phù hợp.</p>{% endfor %}
+</section>
+{% endblock %}
