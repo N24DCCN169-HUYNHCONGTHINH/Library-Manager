@@ -1,0 +1,9 @@
+{% extends "base.html" %}
+{% block title %}Kích hoạt tài khoản{% endblock %}
+{% block content %}
+<section class="card">
+  <h1>Kích hoạt tài khoản thư viện</h1>
+  <p>Tài khoản <strong>{{ username }}</strong> đang chờ bạn đặt mật khẩu riêng.</p>
+  <form method="post">{% csrf_token %}{{ form.as_p }}<button type="submit">Đặt mật khẩu và kích hoạt</button></form>
+</section>
+{% endblock %}

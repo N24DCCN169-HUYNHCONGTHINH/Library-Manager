@@ -1,0 +1,39 @@
+{% extends "base.html" %}
+{% block title %}Cổng độc giả · Quản lý thư viện{% endblock %}
+{% block content %}
+<section class="card">
+  <h1>Cổng độc giả</h1>
+  {% if profile %}
+    <p>Mã bạn đọc: <strong>{{ profile.reader_number }}</strong></p>
+    <p>Loại bạn đọc: {{ profile.get_reader_type_display }}</p>
+    <p>Trạng thái thẻ: {{ profile.get_status_display }}{% if not profile.card_is_current %} (hiện không đủ điều kiện thực hiện giao dịch mượn){% endif %}</p>
+    <p>Hiệu lực: {{ profile.valid_from|date:"d/m/Y" }} – {{ profile.valid_until|date:"d/m/Y" }}</p>
+    {% if not profile.membership_verified %}<p>Hồ sơ/thẻ đang chờ thư viện xác minh; giao dịch mượn chưa được mở.</p>{% endif %}
+    {% if not profile.user.security_profile.email_is_verified %}<p>Email chưa được thư viện xác minh; một số luồng khôi phục tài khoản có thể cần hỗ trợ.</p>{% endif %}
+  {% else %}
+    <p>Tài khoản đã đăng nhập nhưng chưa được thư viện liên kết với hồ sơ bạn đọc. Vui lòng liên hệ quầy dịch vụ.</p>
+  {% endif %}
+</section>
+{% if profile %}
+<section class="card">
+  <h2>Lượt mượn</h2>
+  {% for loan in loans %}
+    <article class="list-item"><strong>{{ loan.copy.book.title }}</strong> · {{ loan.copy.barcode }}<br>
+      {% if loan.copy.branch %}Cơ sở: {{ loan.copy.branch.name }}{% if loan.copy.shelf_location %} · Kệ {{ loan.copy.shelf_location }}{% endif %}<br>{% endif %}
+      Trạng thái: {{ loan.get_status_display }} · Hạn trả: {{ loan.due_at|date:"d/m/Y H:i" }}<br>
+      {% if loan.status == "open" %}<span>{{ loan.renewal_message }}</span>{% if loan.can_request_renewal %}<form method="post" action="{% url 'library:renew' loan.id %}">{% csrf_token %}<button type="submit">Gửi yêu cầu gia hạn</button></form>{% endif %}{% endif %}
+    </article>
+  {% empty %}<p>Chưa có lượt mượn.</p>{% endfor %}
+</section>
+<section class="card">
+  <h2>Đặt trước</h2>
+  {% for reservation in reservations %}<p>{{ reservation.book.title }} · {{ reservation.get_status_display }}{% if reservation.status == "waiting" %} · Vị trí hiện tại trong hàng chờ: {{ reservation.queue_position }}{% endif %}{% if reservation.expires_at %} · Hạn nhận {{ reservation.expires_at|date:"d/m/Y H:i" }}{% endif %}
+    <form method="post" action="{% url 'library:cancel_reservation' reservation.id %}">{% csrf_token %}<button type="submit">Hủy yêu cầu</button></form>
+  </p>{% empty %}<p>Chưa có yêu cầu đặt trước.</p>{% endfor %}
+</section>
+<section class="card">
+  <h2>Khoản phạt</h2>
+  {% for fine in fines %}<p>{{ fine.loan.copy.book.title }} · phát sinh {{ fine.accrued_amount }} ₫ · còn phải trả {{ fine.balance }} ₫ · {{ fine.get_status_display }}</p>{% empty %}<p>Chưa ghi nhận khoản phạt.</p>{% endfor %}
+</section>
+{% endif %}
+{% endblock %}

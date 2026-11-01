@@ -11,10 +11,27 @@
     main { max-width: 920px; margin: 3rem auto; padding: 0 1.25rem; }
     .card { background: white; border: 1px solid #e0e7f0; border-radius: 14px; padding: 1.5rem; }
     a { color: #1f5fb4; }
+    nav { display: flex; gap: 1rem; align-items: center; }
+    nav a { color: white; }
+    nav form { margin-left: auto; }
+    button { border: 0; border-radius: 6px; padding: .55rem .8rem; cursor: pointer; }
+    input { display: block; box-sizing: border-box; width: 100%; max-width: 30rem; padding: .65rem; margin: .35rem 0 1rem; }
+    .errorlist { color: #a21c24; }
   </style>
 </head>
 <body>
-  <header><strong>Hệ thống quản lý thư viện</strong></header>
+  <header>
+    <nav><strong>Hệ thống quản lý thư viện</strong>
+      <a href="{% url 'library:catalog' %}">Tra cứu sách</a>
+      {% if user.is_authenticated %}
+        <a href="{% url 'home' %}">Trang chủ</a>
+        <a href="{% url 'email_change_request' %}">Đổi email</a>
+        {% if library_roles.librarian %}<a href="{% url 'staff_dashboard' %}">Nhân viên</a>{% elif library_roles.reader %}<a href="{% url 'reader_portal' %}">Độc giả</a>{% endif %}
+        <a href="{% url 'password_change' %}">Đổi mật khẩu</a>
+        <form method="post" action="{% url 'logout' %}">{% csrf_token %}<button type="submit">Đăng xuất</button></form>
+      {% else %}<a href="{% url 'login' %}">Đăng nhập</a>{% endif %}
+    </nav>
+  </header>
   <main>{% block content %}{% endblock %}</main>
 </body>
 </html>

@@ -3,8 +3,14 @@
 {% block content %}
 <section class="card">
   <h1>Dự án web quản lý thư viện</h1>
-  <p>Bộ khung Django đã sẵn sàng. Nhóm có thể bắt đầu với đăng nhập, danh mục sách, độc giả và mượn trả.</p>
+  {% if user.is_authenticated %}
+    <p>Xin chào {{ user.get_username }}.</p>
+    {% if library_roles.librarian %}<p><a href="{% url 'staff_dashboard' %}">Mở khu vực nhân viên</a>{% if user.is_staff %} · <a href="/admin/">Quản trị</a>{% endif %}</p>
+    {% elif library_roles.reader %}<p><a href="{% url 'reader_portal' %}">Mở cổng độc giả</a></p>{% else %}<p>Tài khoản chưa được gán vai trò. Hãy liên hệ quản trị viên.</p>{% endif %}
+  {% else %}
+    <p>Đăng nhập bằng tài khoản được thư viện cấp để sử dụng hệ thống.</p>
+    <p><a href="{% url 'login' %}">Đăng nhập</a></p>
+  {% endif %}
   <p>Trạng thái ứng dụng: <a href="{% url 'health' %}">kiểm tra health</a></p>
-  <p><a href="/admin/">Khu vực quản trị Django</a> (cần tạo tài khoản quản trị).</p>
 </section>
 {% endblock %}

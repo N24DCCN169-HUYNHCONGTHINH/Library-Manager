@@ -1,0 +1,7 @@
+{% extends "admin/change_list.html" %}
+{% block object-tools-items %}
+  {% if perms.core.issue_account_invitation %}
+    <li><a href="{% url 'admin:core_accountsecurity_invite' %}" class="addlink">Mời tài khoản</a></li>
+  {% endif %}
+  {{ block.super }}
+{% endblock %}
