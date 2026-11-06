@@ -211,3 +211,16 @@ html{scroll-padding-top:calc(var(--chrome-offset) + 16px)}
 .top-nav{scrollbar-width:none}.top-nav::-webkit-scrollbar{display:none}
 
 ::view-transition-group(library-rail){z-index:100}::view-transition-group(library-topbar){z-index:90}::view-transition-group(library-content){z-index:2}::view-transition-group(library-backdrop){z-index:0}
+
+/* Selected/hovered surfaces always carry their own contrasting foreground. */
+:root{--selection-bg:rgba(198,231,214,.94);--selection-ink:#103e2d;--selection-line:#11785b}
+html[data-bs-theme=dark]{--selection-bg:rgba(39,102,76,.96);--selection-ink:#f0fff6;--selection-line:#80e3bc}
+html[data-bs-theme] body :is(.circulation-flyout a,.dropdown-panel a,.entity-option,.staff-feature-nav a,.section-links a):is(:hover,:focus-visible,[aria-current],[aria-selected=true]){
+ background:var(--selection-bg)!important;color:var(--selection-ink)!important;border-color:var(--selection-line)!important;
+}
+html[data-bs-theme] body :is(.circulation-flyout a,.dropdown-panel a,.entity-option):is(:hover,:focus-visible,[aria-current],[aria-selected=true]) :is(span,svg,strong,small){color:var(--selection-ink)!important;opacity:1}
+html[data-bs-theme] body :is(.circulation-flyout a,.desk-tabs a,.top-nav a)[aria-current]{box-shadow:inset 3px 0 var(--selection-line)}
+html[data-bs-theme] body :is(.top-nav a,.desk-tabs a):is(:hover,:focus-visible,[aria-current]){background:var(--selection-bg)!important;color:var(--selection-ink)!important}
+html[data-bs-theme] body .view-switch button[aria-pressed=true],html[data-bs-theme] body .theme-switch button[aria-pressed=true]{background:var(--selection-bg)!important;color:var(--selection-ink)!important;border-color:var(--selection-line)!important}
+html[data-bs-theme] body :is(.circulation-flyout .flyout-heading,.workspace-heading h2,.page-intro h1,.personal-heading h1){color:var(--glass-ink)!important}
+html[data-bs-theme=dark] body :is(.circulation-flyout .flyout-heading,.workspace-heading p,.workspace-heading small){color:var(--glass-muted)!important}

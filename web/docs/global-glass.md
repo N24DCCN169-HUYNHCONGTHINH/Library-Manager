@@ -16,3 +16,5 @@ The topbar and left rail are fixed and have separate View Transition names. Head
 The decorative layer remains enlarged by 12% on each edge. Plain reloads, filter/search/pagination links, form submissions, browser Back and tabs inside the content do not move the image. In-place circulation changes use the same opt-in rule. Local sessionStorage keeps coordinates plus a short-lived numeric direction/axis timestamp; it stores no URLs or account data. Reduced-motion disables animation, printing hides navigation and the photo. Browsers without cross-document View Transitions use ordinary navigation.
 
 All rail icon states explicitly define foreground/background contrast, including custom coloured icons, active circulation and bottom settings/logout controls.
+
+Selected/hover/focus-visible menu items, tabs, suggestions and theme/view switches share explicit selection foreground/background pairs: dark green with near-white text in Dark mode; pale green with dark ink in Light mode. Child icons and captions inherit the selection foreground instead of keeping the old light-theme colours.
