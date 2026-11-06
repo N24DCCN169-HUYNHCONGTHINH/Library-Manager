@@ -1,0 +1,162 @@
+/* Shared Library Hub glass system. Main surface opacity: .84 × .75 = .63. */
+:root{
+  --glass-surface:rgba(249,252,248,.63);
+  --glass-input:rgba(255,255,255,.57);
+  --glass-menu:rgba(249,252,248,.91);
+  --glass-soft:rgba(235,246,239,.42);
+  --glass-border:rgba(255,255,255,.72);
+  --glass-ink:#173632;
+  --glass-muted:#294a40;
+  --glass-shadow:0 14px 40px rgba(9,32,28,.15),inset 0 1px rgba(255,255,255,.65);
+  --glass-overlay:rgba(230,240,234,.36);
+}
+html[data-bs-theme=dark]{
+  --glass-surface:rgba(16,32,30,.63);
+  --glass-input:rgba(8,24,24,.5625);
+  --glass-menu:rgba(16,32,30,.91);
+  --glass-soft:rgba(34,66,54,.42);
+  --glass-border:rgba(173,220,204,.28);
+  --glass-ink:#e8f5ef;
+  --glass-muted:#c0d5ca;
+  --glass-shadow:0 14px 40px rgba(0,12,12,.24),inset 0 1px rgba(208,255,234,.12);
+  --glass-overlay:rgba(4,19,23,.42);
+}
+html[data-bs-theme] body{
+  color:var(--glass-ink);
+  background-color:var(--personal-bg,#18332d);
+  background-image:linear-gradient(var(--glass-overlay),var(--glass-overlay)),var(--personal-wallpaper,url('images/canada-parliament-library.webp'))!important;
+  background-size:cover;
+  background-position:center;
+  background-attachment:fixed;
+}
+html[data-bs-theme] body .app-main{background:transparent!important}
+html[data-bs-theme] body :is(.card,.topbar,.rail-group,.managed-book-card,.managed-book-table,.desk-tabs,.dashboard-current){
+  background:var(--glass-surface)!important;
+  color:var(--glass-ink)!important;
+  border:1px solid var(--glass-border)!important;
+  box-shadow:var(--glass-shadow);
+  backdrop-filter:blur(18px) saturate(1.25);
+  -webkit-backdrop-filter:blur(18px) saturate(1.25);
+}
+html[data-bs-theme] body .card{border-radius:22px}
+html[data-bs-theme] body :is(.dropdown-panel,.circulation-flyout,.lookup-results,.entity-suggestions,.rail-tooltip,.modal-content){
+  background:var(--glass-menu)!important;
+  color:var(--glass-ink)!important;
+  border-color:var(--glass-border)!important;
+  box-shadow:var(--glass-shadow);
+  backdrop-filter:blur(24px) saturate(1.3);
+  -webkit-backdrop-filter:blur(24px) saturate(1.3);
+}
+html[data-bs-theme] body :is(.top-nav,.book-stock,.preview-icons,.account-note,.theme-switch button,.chart-data-list,.calendar-day,.service-ring-panel,.desk-tabs a){background:var(--glass-soft)!important;color:var(--glass-ink)!important}
+html[data-bs-theme] body :is(.top-nav a[aria-current],.top-nav a:hover,.desk-tabs a[aria-current],.desk-tabs a:hover,.theme-switch button[aria-pressed=true]){background:var(--glass-menu)!important;color:var(--glass-ink)!important;box-shadow:0 2px 10px #0c352519}
+html[data-bs-theme] body :is(input:not([type=hidden]):not([type=checkbox]):not([type=radio]):not([type=submit]):not([type=button]),select,textarea){
+  background:var(--glass-input)!important;color:var(--glass-ink)!important;border-color:rgba(111,151,135,.65)!important;
+  box-shadow:inset 0 1px 2px #103d2412,0 1px rgba(255,255,255,.18);border-radius:12px;
+}
+html[data-bs-theme] body :is(input,textarea)::placeholder{color:var(--glass-muted);opacity:.9}
+html[data-bs-theme] body select option{color:var(--glass-ink);background:var(--tblr-bg-surface,#f8fcf8)}
+html[data-bs-theme] body :is(input,select,textarea,a,button,summary):focus-visible{outline:3px solid #27b3bd;outline-offset:3px}
+html[data-bs-theme] body :is(h1,h2,h3,h4,label,.card>p,.card li,.card legend,.setting-tile,.top-brand,.top-nav a){color:var(--glass-ink)}
+html[data-bs-theme] body :is(.muted,.text-secondary,.helptext,.personal-heading p,.page-intro p,.security-timeline small,.setting-tile small,.account-table small){color:var(--glass-muted)!important}
+html[data-bs-theme] body :is(.page-intro,.personal-heading,.dashboard-filter,.dashboard-range,main>h1,main>p:not(.auth-photo-credit)){
+  background:var(--glass-surface);border:1px solid var(--glass-border);border-radius:18px;padding:18px 22px;
+  backdrop-filter:blur(18px) saturate(1.2);-webkit-backdrop-filter:blur(18px) saturate(1.2);color:var(--glass-ink);
+}
+html[data-bs-theme] body .table{--tblr-table-bg:transparent;--tblr-table-color:var(--glass-ink);--tblr-table-border-color:rgba(119,155,139,.35);color:var(--glass-ink)}
+html[data-bs-theme] body :is(.table td,.table th,.list-table td,.list-table th){background:transparent;color:var(--glass-ink);border-color:rgba(119,155,139,.35)}
+html[data-bs-theme] body :is(.table thead,.list-table thead){background:var(--glass-soft)}
+html[data-bs-theme] body :is(.table tbody tr:hover,.list-table tbody tr:hover){background:var(--glass-soft)}
+html[data-bs-theme] body .card.metric-featured{background:linear-gradient(125deg,rgba(19,69,55,.88),rgba(10,106,110,.83))!important;color:#f0fff7!important}
+html[data-bs-theme] body .metric-featured :is(strong,span,small){color:#f0fff7!important}
+html[data-bs-theme] body .app-footer{background:var(--glass-surface);color:var(--glass-ink);border-top:1px solid var(--glass-border);backdrop-filter:blur(18px);-webkit-backdrop-filter:blur(18px);flex-wrap:wrap;gap:10px}
+html[data-bs-theme] body .app-footer a{color:var(--glass-ink)}
+.glass-photo-credit{font-size:10px;line-height:1.6;flex-basis:100%;opacity:.85}
+html[data-bs-theme] body .account-brand{color:var(--glass-ink);background:var(--glass-surface);border:1px solid var(--glass-border);border-radius:16px;padding:12px;backdrop-filter:blur(18px);-webkit-backdrop-filter:blur(18px)}
+html[data-bs-theme] body.account-shell:has(.auth-workspace){--auth-surface:var(--glass-surface);--auth-input:var(--glass-input);--auth-ink:var(--glass-ink);--auth-muted:var(--glass-muted);--auth-line:var(--glass-border)}
+html[data-bs-theme] body .auth-workspace{background:var(--glass-surface);border-color:var(--glass-border);backdrop-filter:blur(18px) saturate(1.25);-webkit-backdrop-filter:blur(18px) saturate(1.25)}
+html[data-bs-theme] body .auth-intro{background:linear-gradient(155deg,rgba(140,191,162,.18),rgba(100,162,136,.06))}
+html[data-bs-theme] body .auth-photo-credit{background:var(--glass-surface);color:var(--glass-ink)}
+html[data-bs-theme] body .auth-form-panel :is(input:not([type=hidden]),select){background:var(--glass-input)!important;color:var(--glass-ink)!important}
+@supports not (backdrop-filter:blur(1px)){
+  :root{--glass-surface:#f1f7f0;--glass-input:#fff;--glass-menu:#f7fcf6}
+  html[data-bs-theme=dark]{--glass-surface:#18332d;--glass-input:#102823;--glass-menu:#142d27}
+}
+@media(prefers-reduced-transparency:reduce){
+  :root{--glass-surface:#f1f7f0;--glass-input:#fff;--glass-menu:#f7fcf6}
+  html[data-bs-theme=dark]{--glass-surface:#18332d;--glass-input:#102823;--glass-menu:#142d27}
+}
+@media(max-width:760px){html[data-bs-theme] body{background-attachment:scroll}html[data-bs-theme] body :is(.card,.topbar,.rail-group,.managed-book-card){backdrop-filter:blur(12px) saturate(1.2);-webkit-backdrop-filter:blur(12px) saturate(1.2)}html[data-bs-theme] body :is(.page-intro,.personal-heading,.dashboard-filter,.dashboard-range){padding:16px}}
+@media print{
+ html[data-bs-theme] body{background:white!important;color:#111!important}
+ html[data-bs-theme] body :is(.card,.managed-book-card,.managed-book-table,.dashboard-current,.page-intro,.personal-heading){background:white!important;color:#111!important;box-shadow:none!important;backdrop-filter:none!important;-webkit-backdrop-filter:none!important;border-color:#bbb!important}
+ html[data-bs-theme] body :is(input,select,textarea){background:white!important;color:#111!important}
+ .glass-photo-credit{display:none}
+}
+
+html[data-bs-theme] body :is(.period-picker,.date-picker,.due-day,.view-switch,.fine-summary-row,.review-disclosure,.empty-state,.staff-feature-nav a,.section-links a,.workspace-symbol){background:var(--glass-soft)!important;color:var(--glass-ink)!important;border-color:var(--glass-border)}
+html[data-bs-theme] body .card>form[method=get]:not(.account-filter){background:var(--glass-soft)!important;border-color:var(--glass-border)}
+html[data-bs-theme] body .entity-option{background:transparent!important;color:var(--glass-ink)!important}
+html[data-bs-theme] body :is(.entity-option:hover,.entity-option[aria-selected=true]){background:var(--glass-soft)!important;outline-color:#27b3bd}
+html[data-bs-theme] body :is(.due-day.is-today,.period-picker button.selected,.view-switch button[aria-pressed=true]){background:rgba(19,82,66,.90)!important;color:#effff5!important}
+html[data-bs-theme] body .period-picker button:not(.selected){color:var(--glass-ink)}
+html[data-bs-theme] body .availability-ring:before{background:var(--glass-menu)}
+html[data-bs-theme] body :is(.managed-cover-image,.catalog-cover-image){background:var(--glass-soft)}
+@media print{:root,html[data-bs-theme=dark]{--glass-ink:#111;--glass-muted:#444;--glass-soft:transparent;--glass-surface:white;--glass-border:#bbb}}
+
+/* Hover restores the former .84 opacity; motion never changes layout dimensions. */
+:root{--glass-hover-surface:rgba(249,252,248,.84);--glass-hover-input:rgba(255,255,255,.76);--glass-lift-shadow:0 22px 48px rgba(9,32,28,.23),inset 0 1px rgba(255,255,255,.8)}
+html[data-bs-theme=dark]{--glass-hover-surface:rgba(16,32,30,.84);--glass-hover-input:rgba(8,24,24,.75);--glass-lift-shadow:0 22px 48px rgba(0,8,10,.4),inset 0 1px rgba(205,255,231,.22)}
+@media(hover:hover) and (pointer:fine){
+ html[data-bs-theme] body :is(.card,.managed-book-card,.auth-workspace,.topbar,.rail-group){transition:background-color .22s ease,box-shadow .22s ease,transform .22s ease,border-color .22s ease}
+ html[data-bs-theme] body :is(.card,.managed-book-card,.auth-workspace,.topbar,.rail-group):hover{--glass-surface:var(--glass-hover-surface);box-shadow:var(--glass-lift-shadow)}
+ html[data-bs-theme] body :is(.card,.auth-workspace):hover{transform:translateY(-2px) scale(1.004)}
+ html[data-bs-theme] body .managed-book-card:hover{transform:translateY(-4px) scale(1.012)}
+ html[data-bs-theme] body :is(.card,.auth-workspace):focus-within{transform:none}
+ html[data-bs-theme] body :is(.dropdown-panel,.circulation-flyout,.entity-suggestions):hover{--glass-menu:rgba(249,252,248,.97)}
+ html[data-bs-theme=dark] body :is(.dropdown-panel,.circulation-flyout,.entity-suggestions):hover{--glass-menu:rgba(16,32,30,.97)}
+ html[data-bs-theme] body :is(button,.btn,.rail-link,.desk-tabs a,.setting-tile,.staff-feature-nav a,.auth-switch,.section-links a){transition:transform .18s ease,box-shadow .18s ease,background-color .18s ease}
+ html[data-bs-theme] body :is(button,.btn,.rail-link,.desk-tabs a,.staff-feature-nav a,.auth-switch,.section-links a):not(:disabled):not([aria-disabled=true]):hover{transform:translateY(-2px) scale(1.025);box-shadow:0 7px 16px #0a352b25}
+ html[data-bs-theme] body :is(.entity-option,.period-picker button):hover{transform:none}
+ html[data-bs-theme] body .setting-tile:hover{transform:translateX(3px);background:var(--glass-soft)!important}
+ html[data-bs-theme] body :is(input:not([type=hidden]):not([type=checkbox]):not([type=radio]),select,textarea){transition:background-color .2s ease,box-shadow .2s ease,border-color .2s ease}
+ html[data-bs-theme] body :is(input:not([type=hidden]):not([type=checkbox]):not([type=radio]),select,textarea):is(:hover,:focus){--glass-input:var(--glass-hover-input);box-shadow:0 4px 15px #0a352b20,inset 0 1px #ffffff30}
+ html[data-bs-theme] body :is(.table tbody tr,.list-table tbody tr){transition:background-color .18s ease,box-shadow .18s ease}
+ html[data-bs-theme] body :is(.table tbody tr,.list-table tbody tr):hover{background:var(--glass-hover-surface);box-shadow:inset 3px 0 #24a891}
+}
+@media(prefers-reduced-motion:reduce){html[data-bs-theme] body :is(.card,.managed-book-card,.auth-workspace,.topbar,.rail-group,button,.btn,.rail-link,.desk-tabs a,.setting-tile,.staff-feature-nav a,.auth-switch,.section-links a,input,select,textarea){transition:none!important;transform:none!important}}
+@media(prefers-reduced-transparency:reduce){:root{--glass-hover-surface:#f1f7f0;--glass-hover-input:#fff}html[data-bs-theme=dark]{--glass-hover-surface:#18332d;--glass-hover-input:#102823}}
+@media print{html[data-bs-theme] body :is(.card,.managed-book-card,.auth-workspace){transform:none!important;transition:none!important}}
+
+html[data-bs-theme] body .hero .eyebrow{color:var(--glass-muted)!important}
+html[data-bs-theme] body .hero .btn-outline-light{color:var(--glass-ink);border-color:var(--glass-ink);background:var(--glass-soft)}
+html[data-bs-theme=dark] body :is(.btn-outline-primary,.btn-outline-secondary){color:#a8e5d3;border-color:#82baaa}
+html[data-bs-theme=dark] body :is(.btn-outline-primary,.btn-outline-secondary):hover{background:rgba(33,103,87,.88);color:#f1fff9}
+
+html[data-bs-theme] body .metric-card>span,html[data-bs-theme] body .metric-card small{color:var(--glass-muted)}
+html[data-bs-theme] body .metric-featured>span,html[data-bs-theme] body .metric-featured small{color:#effff5!important}
+
+/* Backdrop filters create stacking contexts: keep open menus above adjacent glass. */
+html[data-bs-theme] body .topbar{position:relative;z-index:50}
+html[data-bs-theme] body .app-sidebar{z-index:60}
+html[data-bs-theme] body .rail-group:has(.rail-circulation[open]){position:relative;z-index:65}
+html[data-bs-theme] body :is(.card,.managed-book-card):has(.entity-suggestions:not([hidden])){position:relative;z-index:25;transform:none!important}
+html[data-bs-theme] body .text-danger{color:#a21e34!important}
+html[data-bs-theme=dark] body .text-danger{color:#ffadba!important}
+html[data-bs-theme] body :is(.errorlist,.alert-danger,[role=alert]){background:rgba(255,234,239,.95)!important;color:#8a1730!important}
+html[data-bs-theme] body :is(.errorlist,.alert-danger,[role=alert]) :is(li,p,strong,a){color:#8a1730!important}
+html[data-bs-theme=dark] body :is(.errorlist,.alert-danger,[role=alert]){background:rgba(80,24,39,.95)!important;color:#ffbeca!important}
+html[data-bs-theme=dark] body :is(.errorlist,.alert-danger,[role=alert]) :is(li,p,strong,a){color:#ffbeca!important}
+
+html[data-bs-theme] body :is(.circulation-flyout,.dropdown-panel) a{color:var(--glass-ink)!important}
+html[data-bs-theme] body .circulation-flyout a span{color:inherit!important}
+/* The oversized photograph moves independently from text and controls. */
+html[data-bs-theme] body{isolation:isolate;background-image:none!important}
+.library-backdrop{position:fixed;inset:0;z-index:-1;overflow:hidden;pointer-events:none;view-transition-name:library-backdrop}
+.library-backdrop:before{content:"";position:absolute;inset:-12%;background-image:var(--personal-wallpaper,url('images/canada-parliament-library.webp'));background-position:center;background-size:cover;background-repeat:no-repeat;transform:translate3d(var(--scene-to-x,0%),var(--scene-to-y,0%),0);animation:library-scene-a 1.8s cubic-bezier(.2,.65,.25,1) both}
+.library-backdrop:after{content:"";position:absolute;inset:0;background:var(--glass-overlay)}
+html[data-scene-run=b] .library-backdrop:before{animation-name:library-scene-b}
+@keyframes library-scene-a{from{transform:translate3d(var(--scene-from-x,0%),var(--scene-from-y,0%),0)}to{transform:translate3d(var(--scene-to-x,0%),var(--scene-to-y,0%),0)}}
+@keyframes library-scene-b{from{transform:translate3d(var(--scene-from-x,0%),var(--scene-from-y,0%),0)}to{transform:translate3d(var(--scene-to-x,0%),var(--scene-to-y,0%),0)}}
+::view-transition-old(library-backdrop),::view-transition-new(library-backdrop){animation-duration:.7s}
+@media(prefers-reduced-motion:reduce){.library-backdrop:before{animation:none!important;transform:none!important}::view-transition-old(library-backdrop),::view-transition-new(library-backdrop){animation:none!important}}
+@media print{.library-backdrop{display:none!important}}
