@@ -12,7 +12,7 @@ from django.contrib.auth import views as auth_views
 from django.core.exceptions import ObjectDoesNotExist, ValidationError
 from django.core.paginator import Paginator
 from django.db import transaction
-from django.db.models import Q
+from django.db.models import F, Q
 from django.http import HttpResponseBadRequest, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
@@ -103,10 +103,13 @@ def reader_portal(request):
     except ObjectDoesNotExist:
         profile = None
     loans = reservations = fines = []
+    loan_notifications = []
     summary = {}
     loan_status = request.GET.get("loan_status", "")
     if profile:
         from apps.library.models import Fine, Loan, Reservation
+        from apps.library.models import LoanNotification
+        loan_notifications = LoanNotification.objects.filter(loan__reader=profile, loan__status="open", due_at=F("loan__due_at")).select_related("loan__copy__book").order_by("-created_at")[:10]
         now = timezone.now()
         own_loans = Loan.objects.filter(reader=profile)
         own_reservations = Reservation.objects.filter(reader=profile)
@@ -149,7 +152,7 @@ def reader_portal(request):
         fines = Paginator(own_fines, 20).get_page(request.GET.get("fine_page"))
     return render(request, "core/reader_portal.html", {"profile": profile, "today": timezone.localdate(),
         "loans": loans, "reservations": reservations, "fines": fines, "summary": summary,
-        "loan_status": loan_status})
+        "loan_status": loan_status, "loan_notifications": loan_notifications})
 
 
 @never_cache

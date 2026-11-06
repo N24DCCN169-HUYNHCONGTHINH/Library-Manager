@@ -602,3 +602,16 @@ Mới ghi ý tưởng nhắc trước 2 ngày; chưa xác định email bắt bu
 - [Dịch vụ mượn tài liệu — Thư viện Khoa học Tổng hợp TP.HCM](https://www.thuvientphcm.gov.vn/Dich-vu-muon-tai-lieu)
 - [Nội quy thư viện — Trung tâm TT-TV PTIT](https://lib.ptit.edu.vn/noi-quy-thu-vien/). Nội quy trên trang kèm quyết định năm 2009; cần xác minh tính hiện hành, đặc biệt với cơ sở TP.HCM.
 - [Quy trình thu tiền phạt mượn quá hạn và làm hỏng, mất tài liệu — Thư viện ĐH Mở TP.HCM](https://v1.ou.edu.vn/hcqt/Quy%20trnh/TV.05.pdf), hiệu lực 01/01/2022.
+
+## Phụ lục D — Chủ dự án cập nhật ngày 06/11/2026
+
+Nguồn: xác nhận trực tiếp của chủ dự án trong cuộc trao đổi. Không coi đây là bằng chứng quy định chính thức của một trường/thư viện bên ngoài. Phụ lục này thay thế các mức phí mất/hỏng và giờ phục vụ khác ở phía trên; điều kiện phê duyệt, chứng từ, khiếu nại và chống thu hai lần trong Phụ lục A vẫn áp dụng.
+
+- Thứ Hai–Sáu: 08:00–21:00; thứ Bảy: 08:00–18:00; Chủ Nhật: 08:00–16:00. Giai đoạn cao điểm chỉ đổi sau khi có thông báo cụ thể.
+- Nghỉ Lễ/Tết và lịch nghỉ chung ĐHQG TP.HCM: nhập ngày cụ thể theo thông báo từng năm, không tự đoán ngày nghỉ bù hoặc kỳ nghỉ Tết dài.
+- Mua trả sách: đúng tên, tác giả, nhà xuất bản, bản gốc hoặc bản xuất bản mới hơn; phí kỹ thuật 10.000 đồng/cuốn. Phải kiểm tra bản thật trước khi ghi hoàn tất.
+- Bồi thường tiền tài liệu thông thường trong nước: 1–2 lần giá bìa có căn cứ + 10.000 đồng. Quản lý chọn hệ số cụ thể và ghi lý do, không tự mặc định mức cao nhất.
+- Ngoại văn/giáo trình nhập khẩu: 2–3 lần giá mua ban đầu quy đổi VND theo tỷ giá có nguồn/ngày + 20.000 đồng. Tài liệu quý hiếm/cổ/không có giá tin cậy/đóng tập đặc biệt phải chờ thẩm định; không tự tính 3 lần khi không có căn cứ giá.
+- Hỏng nhẹ: chi phí sửa chữa có chứng từ 10.000–30.000 đồng; tiếp tục giữ giới hạn không quá giá thay thế có căn cứ theo Phụ lục A. Nếu không đáp ứng hoặc hỏng nặng thì chuyển hồ sơ theo quy trình mất, không thu tự động.
+- Quyết định thẩm định ghi toàn bộ số tiền được duyệt, căn cứ và người duyệt; không tự cộng phí ngoài quyết định.
+- Phí cấp lại thẻ sinh viên 30.000–50.000 đồng là khoảng tham khảo do trường thành viên quyết định; chưa tự thu trong hệ thống. Mức 95.000 đồng cho bạn đọc ngoài ĐHQG được lưu tham khảo, chưa áp dụng vì MVP chưa phục vụ nhóm này.

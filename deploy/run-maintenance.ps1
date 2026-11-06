@@ -1,4 +1,4 @@
-param([Parameter(Mandatory=$true)][string]$BackupDirectory)
+param([Parameter(Mandatory=$true)][string]$BackupDirectory, [switch]$SendLoanEmails)
 $ErrorActionPreference = 'Stop'
 $repoRoot = Split-Path $PSScriptRoot -Parent
 $pythonPath = Join-Path $repoRoot 'web/.venv/Scripts/python.exe'
@@ -11,6 +11,10 @@ try {
         & $pythonPath manage.py $command
         if ($LASTEXITCODE -ne 0) { throw "Maintenance failed: $command" }
     }
+    $noticeArguments = @('manage.py', 'send_loan_notifications')
+    if ($SendLoanEmails) { $noticeArguments += '--send' }
+    & $pythonPath @noticeArguments
+    if ($LASTEXITCODE -ne 0) { throw 'Loan reminders failed.' }
     $stamp = [DateTime]::UtcNow.ToString('yyyyMMdd-HHmmss-ffff')
     & $pythonPath manage.py backup_library --output (Join-Path $BackupDirectory ("library-$stamp.zip"))
     if ($LASTEXITCODE -ne 0) { throw 'Backup failed.' }

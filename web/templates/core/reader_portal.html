@@ -3,6 +3,7 @@
 {% block content %}
 <div class="page-intro"><div><div class="eyebrow">THƯ VIỆN CỦA BẠN</div><h1>Cổng độc giả</h1><p class="muted">Theo dõi hành trình đọc và quản lý các yêu cầu của bạn.</p></div></div>{% if profile %}<div class="stat-grid"><div class="card stat">Sách đang mượn<strong>{{ summary.open_loans }}</strong></div><div class="card stat">Lượt quá hạn<strong class="text-danger">{{ summary.overdue_loans }}</strong></div><div class="card stat">Đặt trước đang hoạt động<strong>{{ summary.active_reservations }}</strong></div><div class="card stat">Khoản còn phải trả<strong>{{ summary.balance }} ₫</strong></div></div>{% endif %}<section class="card">
   <h2>Thông tin thẻ bạn đọc</h2>
+  {% if loan_notifications %}<aside aria-label="Nhắc hạn sách"><h3>Nhắc hạn gần đây</h3>{% for notice in loan_notifications %}<p><strong>{{ notice.get_kind_display }}</strong> · {{ notice.loan.copy.book.title }} · hạn {{ notice.due_at|date:"d/m/Y H:i" }}{% if notice.last_error %} · Email chưa gửi được; thông tin vẫn hiển thị tại đây.{% endif %}</p>{% endfor %}</aside>{% endif %}
   {% for message in messages %}<p role="status">{{ message }}</p>{% endfor %}
   {% if profile %}
     <p>Tài khoản: {{ user.username }} · {{ user.get_full_name }} · {{ user.email }}</p>

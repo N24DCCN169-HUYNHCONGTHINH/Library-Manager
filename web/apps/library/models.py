@@ -74,6 +74,8 @@ class Book(models.Model):
     replacement_price = models.DecimalField(max_digits=12, decimal_places=0, null=True, blank=True, validators=[MinValueValidator(0)])
     replacement_price_source = models.CharField(max_length=500, blank=True)
     replacement_price_checked_at = models.DateField(null=True, blank=True)
+    replacement_price_approved_by = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.PROTECT, related_name="approved_book_prices")
+    replacement_price_approved_at = models.DateTimeField(null=True, blank=True)
     is_active = models.BooleanField(default=True)
     created_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="created_books")
     updated_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="updated_books")
@@ -85,6 +87,14 @@ class Book(models.Model):
         permissions = [("manage_catalog", "Can manage library catalog")]
 
     def save(self, *args, **kwargs):
+        if self.pk:
+            old = type(self).objects.get(pk=self.pk)
+            price_fields = ("replacement_price", "replacement_price_source", "replacement_price_checked_at")
+            if any(getattr(old, key) != getattr(self, key) for key in price_fields):
+                self.replacement_price_approved_by = None
+                self.replacement_price_approved_at = None
+                if kwargs.get("update_fields") is not None:
+                    kwargs["update_fields"] = set(kwargs["update_fields"]) | {"replacement_price_approved_by", "replacement_price_approved_at"}
         if self._state.adding and self.material_type in {self.MaterialType.RARE, self.MaterialType.PERIODICAL, self.MaterialType.THESIS}:
             self.loan_mode = self.LoanMode.IN_LIBRARY_ONLY
         super().save(*args, **kwargs)
@@ -227,6 +237,9 @@ class Loan(models.Model):
     max_loans_snapshot = models.PositiveSmallIntegerField()
     overdue_rate_snapshot = models.DecimalField(max_digits=8, decimal_places=0)
     overdue_cap_snapshot = models.DecimalField(max_digits=10, decimal_places=0)
+    replacement_price_snapshot = models.DecimalField(max_digits=12, decimal_places=0, null=True, blank=True)
+    calendar_snapshot = models.JSONField(default=dict, blank=True)
+    long_overdue_review_at = models.DateTimeField(null=True, blank=True)
     loaned_at = models.DateTimeField(default=timezone.now)
     due_at = models.DateTimeField(db_index=True)
     returned_at = models.DateTimeField(null=True, blank=True)
@@ -386,10 +399,26 @@ class DamageCase(models.Model):
 class LoanEvent(models.Model):
     loan = models.ForeignKey(Loan, on_delete=models.PROTECT, related_name="events")
     event_type = models.CharField(max_length=32)
-    actor = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="loan_events")
+    actor = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.PROTECT, related_name="loan_events")
     occurred_at = models.DateTimeField(default=timezone.now)
     reason = models.CharField(max_length=500, blank=True)
     details = models.JSONField(default=dict, blank=True)
 
     class Meta:
         ordering = ["occurred_at", "pk"]
+
+
+class LoanNotification(models.Model):
+    """One notice per loan, due-date version and reminder date; email is retryable."""
+
+    loan = models.ForeignKey(Loan, on_delete=models.PROTECT, related_name="notifications")
+    due_at = models.DateTimeField()
+    reminder_date = models.DateField()
+    kind = models.CharField(max_length=16, choices=[("upcoming", "Sắp đến hạn"), ("due", "Đến hạn"), ("overdue", "Quá hạn")])
+    created_at = models.DateTimeField(default=timezone.now)
+    sent_at = models.DateTimeField(null=True, blank=True)
+    attempts = models.PositiveIntegerField(default=0)
+    last_error = models.CharField(max_length=300, blank=True)
+
+    class Meta:
+        constraints = [models.UniqueConstraint(fields=["loan", "due_at", "reminder_date"], name="uniq_loan_reminder_date")]

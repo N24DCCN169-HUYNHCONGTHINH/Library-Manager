@@ -1,4 +1,4 @@
-from datetime import datetime, time, timedelta
+from datetime import date, datetime, time, timedelta
 from decimal import Decimal, InvalidOperation
 from functools import wraps
 from uuid import uuid4
@@ -117,6 +117,14 @@ def _event(loan, event_type, actor, reason="", details=None):
     LoanEvent.objects.create(loan=loan, event_type=event_type, actor=actor, reason=reason, details=details or {})
 
 
+def _calendar_snapshot():
+    return {
+        "captured_at": timezone.now().isoformat(),
+        "closures": [str(d) for d in LibraryClosure.objects.filter(is_full_day=True).values_list("date", flat=True)],
+        "hours": list(LibraryHours.objects.values("weekday", "is_open")),
+    }
+
+
 def checkout_copy(reader_number, barcode, actor, idempotency_key=None):
     _require_permission(actor, "checkout_loan")
     # Housekeeping commits independently; rejecting a pickup must not resurrect
@@ -162,7 +170,10 @@ def _checkout_copy(reader_number, barcode, actor, idempotency_key=None):
         reader=reader, copy=copy, policy=policy, reader_type_snapshot=reader.reader_type,
         material_type_snapshot=copy.book.material_type, policy_version_snapshot=policy.version,
         max_loans_snapshot=policy.max_active_loans, overdue_rate_snapshot=policy.overdue_rate_per_day,
-        overdue_cap_snapshot=policy.overdue_fine_cap, loaned_at=now, due_at=_due_at(now, policy.loan_days),
+        overdue_cap_snapshot=policy.overdue_fine_cap,
+        replacement_price_snapshot=(copy.book.replacement_price if copy.book.replacement_price_approved_at else None),
+        calendar_snapshot=_calendar_snapshot(),
+        loaned_at=now, due_at=_due_at(now, policy.loan_days),
         max_renewals_snapshot=policy.max_renewals, renewal_days_snapshot=policy.renewal_days,
         idempotency_key=idempotency_key, created_by=actor,
     )
@@ -176,11 +187,22 @@ def _accrue_fine(loan, returned_at):
     start = timezone.localtime(loan.due_at).date() + timedelta(days=1)
     end = timezone.localtime(returned_at).date()
     closures = set(LibraryClosure.objects.filter(is_full_day=True, date__gte=start, date__lte=end).values_list("date", flat=True))
+    # Preserve closures announced at checkout, while also honoring later
+    # emergency closures. Removing a calendar row must not increase old fines.
+    closures.update(date.fromisoformat(day) for day in loan.calendar_snapshot.get("closures", []))
     days = sum(1 for offset in range(max(0, (end - start).days + 1)) if start + timedelta(days=offset) not in closures)
     cap = loan.overdue_cap_snapshot
-    if loan.copy.book.replacement_price is not None:
-        cap = min(cap, loan.copy.book.replacement_price)
+    if loan.replacement_price_snapshot is not None:
+        cap = min(cap, loan.replacement_price_snapshot)
+    # An existing fine's cap is immutable even if catalog prices change later.
+    existing_fine = Fine.objects.filter(loan=loan).first()
+    if existing_fine:
+        cap = min(cap, existing_fine.cap_amount)
     amount = min(Decimal(days) * loan.overdue_rate_snapshot, cap)
+    if days > 0 and Decimal(days) * loan.overdue_rate_snapshot >= cap and loan.status == Loan.Status.OPEN and not loan.long_overdue_review_at:
+        loan.long_overdue_review_at = returned_at
+        loan.save(update_fields=["long_overdue_review_at"])
+        _event(loan, "long_overdue_review", None, "Đã chạm trần phạt; cần liên hệ độc giả, không tự kết luận mất sách.", {"cap": str(cap), "source": "automatic"})
     if amount <= 0:
         return None
     fine, _ = Fine.objects.get_or_create(loan=loan, defaults={
@@ -213,6 +235,10 @@ def refresh_overdue_loans(reader=None):
             if timezone.localdate() >= overdue_day and profile.status == ReaderProfile.Status.ACTIVE:
                 profile.status = ReaderProfile.Status.SUSPENDED
                 profile.save(update_fields=["status", "updated_at"])
+                from apps.core.lifecycle import record_security_event
+                from apps.core.models import AccountSecurityEvent
+                record_security_event(profile.user, AccountSecurityEvent.Kind.ACCOUNT_DISABLED,
+                    details={"reason": "Tạm ngưng do quá hạn đủ 7 ngày", "source": "automatic_overdue_review", "loan_id": loan.pk})
             refreshed += 1
     return refreshed
 
@@ -272,12 +298,36 @@ def record_fine_payment(fine_id, amount, actor, kind=FinePayment.Kind.PAYMENT, a
 @circulation_write
 def resolve_reader_restriction(restriction_id, actor, resolution):
     _require_permission(actor, "manage_reader_restrictions")
+    if not resolution.strip():
+        raise CirculationError("Cần ghi lý do gỡ hạn chế.")
     restriction = ReaderRestriction.objects.select_for_update().get(pk=restriction_id, resolved_at__isnull=True)
     restriction.resolved_by = actor
     restriction.resolved_at = timezone.now()
     restriction.resolution = resolution[:500]
     restriction.save(update_fields=["resolved_by", "resolved_at", "resolution"])
     return restriction
+
+
+@circulation_write
+def reopen_reader(reader_number, actor, reason):
+    _require_permission(actor, "manage_reader_restrictions")
+    if not reason.strip():
+        raise CirculationError("Cần ghi lý do mở lại hồ sơ.")
+    reader = ReaderProfile.objects.select_for_update().select_related("user").get(reader_number=reader_number)
+    if reader.status != ReaderProfile.Status.SUSPENDED:
+        raise CirculationError("Hồ sơ không ở trạng thái tạm ngưng.")
+    if reader.loans.filter(status=Loan.Status.OPEN, due_at__lt=timezone.now()).exists():
+        raise CirculationError("Vẫn còn sách quá hạn.")
+    if reader.restrictions.filter(resolved_at__isnull=True).exists() or reader.loans.filter(damage_cases__status__in=["open", "contested", "approved"]).exists():
+        raise CirculationError("Cần giải quyết hồ sơ hạn chế/mất hỏng trước.")
+    if any(fine.balance > 0 for fine in Fine.objects.filter(loan__reader=reader)):
+        raise CirculationError("Vẫn còn khoản phải thanh toán.")
+    from apps.core.models import AccountSecurityEvent
+    from apps.core.lifecycle import record_security_event
+    reader.status = ReaderProfile.Status.ACTIVE
+    reader.save(update_fields=["status", "updated_at"])
+    record_security_event(reader.user, AccountSecurityEvent.Kind.ACCOUNT_REACTIVATED, actor, {"reason": reason[:500], "source": "circulation_review"})
+    return reader
 
 
 @circulation_write
@@ -304,8 +354,13 @@ def approve_damage_case(case_id, actor, replacement_amount, processing_fee, reas
 
 
 @circulation_write
-def return_copy(barcode, actor, condition_note="", idempotency_key=None):
+def return_copy(barcode, actor, condition_note="", idempotency_key=None, condition_kind=None):
     _require_permission(actor, "return_loan")
+    condition_kind = condition_kind or (DamageCase.Kind.MINOR_DAMAGE if condition_note else DamageCase.Kind.NORMAL_WEAR)
+    if condition_kind not in {DamageCase.Kind.NORMAL_WEAR, DamageCase.Kind.MINOR_DAMAGE, DamageCase.Kind.MAJOR_DAMAGE}:
+        raise CirculationError("Phân loại tình trạng trả không hợp lệ.")
+    if condition_kind != DamageCase.Kind.NORMAL_WEAR and not condition_note.strip():
+        raise CirculationError("Cần mô tả tình trạng hư hỏng.")
     copy = BookCopy.objects.select_for_update().get(barcode=barcode)
     Book.objects.select_for_update().get(pk=copy.book_id)
     if idempotency_key:
@@ -326,19 +381,18 @@ def return_copy(barcode, actor, condition_note="", idempotency_key=None):
     loan.return_idempotency_key = idempotency_key
     loan.save(update_fields=["status", "returned_at", "returned_by", "return_idempotency_key"])
     _accrue_fine(loan, now)
-    if condition_note:
+    if condition_kind != DamageCase.Kind.NORMAL_WEAR:
         copy.status = BookCopy.Status.RETURN_REVIEW
         copy.condition_note = condition_note[:500]
         copy.save(update_fields=["status", "condition_note"])
-        from .models import DamageCase, ReaderRestriction
-        DamageCase.objects.create(loan=loan, kind=DamageCase.Kind.MINOR_DAMAGE, description=condition_note, created_by=actor)
+        DamageCase.objects.create(loan=loan, kind=condition_kind, description=condition_note, created_by=actor)
         ReaderRestriction.objects.get_or_create(reader=loan.reader, kind=ReaderRestriction.Kind.DAMAGE_REVIEW, resolved_at__isnull=True,
             defaults={"reason": condition_note[:500], "created_by": actor})
     else:
         copy.status = BookCopy.Status.AVAILABLE
         copy.save(update_fields=["status"])
         allocate_next_reservation(copy, actor)
-    _event(loan, "return", actor, reason=condition_note)
+    _event(loan, "return", actor, reason=condition_note, details={"condition": condition_kind})
     return loan
 
 

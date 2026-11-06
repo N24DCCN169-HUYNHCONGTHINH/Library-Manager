@@ -1,0 +1,7 @@
+{% extends "base.html" %}
+{% block title %}Dự tính bồi thường · Library Hub{% endblock %}
+{% block content %}
+<div class="page-intro"><div><div class="eyebrow">QUẢN LÝ MẤT / HỎNG</div><h1>Dự tính mức bồi thường</h1><p class="muted">Biểu phí chủ dự án xác nhận ngày 06/11/2026.</p></div><a href="{% url 'library:circulation_desk' %}">Về quầy mượn/trả</a></div>
+<section class="card"><p>Chọn phương án và ghi căn cứ. Tài liệu quý hiếm, cổ hoặc không có giá tin cậy cần quyết định thẩm định. Kết quả tại đây chưa tạo khoản nợ hoặc biên nhận thu tiền.</p><form method="post">{% csrf_token %}{{ form.as_p }}<button type="submit">Tính theo biểu phí</button></form></section>
+{% if quote %}<section class="card" aria-live="polite"><h2>Kết quả dự tính</h2><p>Bồi thường / sửa chữa: <strong>{{ quote.principal }} ₫</strong></p><p>Phí xử lý: {{ quote.processing_fee }} ₫</p><p>Tổng: <strong>{{ quote.total }} ₫</strong></p><p>Căn cứ: {{ quote.source }}</p><p>Cần đối chiếu hồ sơ, thời hạn khiếu nại và các khoản đã thu trước khi chốt quyết toán.</p></section>{% endif %}
+{% endblock %}

@@ -11,9 +11,27 @@ from django.views.decorators.http import require_POST
 
 from apps.core.models import ReaderProfile
 from apps.core.views import has_role, staff_mfa_required
-from .forms import BookForm, CheckoutForm, FinePaymentForm, ReturnForm, RenewalForm
+from .forms import BookForm, CheckoutForm, FinePaymentForm, ReturnForm, RenewalForm, ReopenReaderForm
 from .models import Book, BookCopy, Fine, LibraryBranch, Loan, Reservation
 from .services import CirculationError, cancel_reservation, checkout_copy, place_reservation, record_fine_payment, renew_loan, return_copy, expire_ready_reservations
+from .services import reopen_reader
+from .forms import DamageQuoteForm
+from .damage_pricing import quote_damage
+
+
+@never_cache
+@staff_mfa_required
+def damage_quote(request):
+    if not request.user.has_perm("library.approve_damagecase"):
+        return HttpResponseForbidden("Chỉ quản lý được lập mức bồi thường có căn cứ.")
+    form = DamageQuoteForm(request.POST if request.method == "POST" else None)
+    quote = None
+    if request.method == "POST" and form.is_valid():
+        try:
+            quote = quote_damage(**form.cleaned_data)
+        except CirculationError as exc:
+            form.add_error(None, str(exc))
+    return render(request, "library/damage_quote.html", {"form": form, "quote": quote})
 
 
 @staff_mfa_required
@@ -96,11 +114,12 @@ def circulation_desk(request):
     return_form = ReturnForm(request.POST if request.method == "POST" and request.POST.get("action") == "return" else None, auto_id="return_%s")
     payment_form = FinePaymentForm(request.POST if request.method == "POST" and request.POST.get("action") == "payment" else None, auto_id="payment_%s")
     renewal_form = RenewalForm(request.POST if request.method == "POST" and request.POST.get("action") == "renew" else None, auto_id="renewal_%s")
+    reopen_form = ReopenReaderForm(request.POST if request.method == "POST" and request.POST.get("action") == "reopen" else None)
     if request.method == "POST":
         try:
             action = request.POST.get("action")
-            forms = {"checkout": checkout_form, "return": return_form, "payment": payment_form, "renew": renewal_form}
-            permissions = {"checkout": "checkout_loan", "return": "return_loan", "payment": "collect_finepayment", "renew": "renew_loan", "expire": "manage_reservation"}
+            forms = {"checkout": checkout_form, "return": return_form, "payment": payment_form, "renew": renewal_form, "reopen": reopen_form}
+            permissions = {"checkout": "checkout_loan", "return": "return_loan", "payment": "collect_finepayment", "renew": "renew_loan", "expire": "manage_reservation", "reopen": "manage_reader_restrictions"}
             if action not in permissions:
                 messages.error(request, "Thao tác không hợp lệ.")
             elif not request.user.has_perm(f"library.{permissions[action]}"):
@@ -111,12 +130,15 @@ def circulation_desk(request):
                 return redirect("library:circulation_desk")
             elif forms[action].is_valid():
                 data = forms[action].cleaned_data
-                if action == "checkout":
+                if action == "reopen":
+                    reopen_reader(data["reader_number"], request.user, data["reason"])
+                    messages.success(request, "Đã mở lại hồ sơ và lưu căn cứ xử lý.")
+                elif action == "checkout":
                     loan = checkout_copy(data["reader_number"], data["barcode"], request.user, data["idempotency_key"])
                     messages.success(request, f"Đã ghi nhận mượn #{loan.pk}. Hạn trả: {timezone.localtime(loan.due_at):%d/%m/%Y %H:%M}.")
                 elif action == "return":
-                    loan = return_copy(data["barcode"], request.user, data["condition_note"], data["idempotency_key"])
-                    messages.success(request, "Đã xử lý trả sách; bản bất thường được giữ để kiểm tra." if data["condition_note"] else "Đã xử lý trả sách, không tạo lượt trả trùng.")
+                    loan = return_copy(data["barcode"], request.user, data["condition_note"], data["idempotency_key"], data["condition_kind"])
+                    messages.success(request, "Đã xử lý trả sách; tình trạng và căn cứ đã được ghi nhận.")
                 elif action == "renew":
                     loan = renew_loan(data["loan_id"], request.user, data["idempotency_key"])
                     messages.success(request, f"Đã gia hạn #{loan.pk}. Hạn mới: {timezone.localtime(loan.due_at):%d/%m/%Y %H:%M}.")
@@ -132,7 +154,7 @@ def circulation_desk(request):
     loans = Loan.objects.filter(status=Loan.Status.OPEN).select_related("reader", "copy__book").order_by("due_at")[:50]
     unpaid_fines = Fine.objects.filter(status=Fine.Status.DUE).select_related("loan__reader", "loan__copy__book").order_by("calculated_at")[:50]
     reservations = Reservation.objects.select_related("reader", "book", "copy", "notification").filter(status__in=[Reservation.Status.WAITING, Reservation.Status.READY]).order_by("created_at", "pk")[:50]
-    return render(request, "library/circulation_desk.html", {"checkout_form": checkout_form, "return_form": return_form, "payment_form": payment_form, "renewal_form": renewal_form, "loans": loans, "unpaid_fines": unpaid_fines, "reservations": reservations})
+    return render(request, "library/circulation_desk.html", {"checkout_form": checkout_form, "return_form": return_form, "payment_form": payment_form, "renewal_form": renewal_form, "reopen_form": reopen_form, "loans": loans, "unpaid_fines": unpaid_fines, "reservations": reservations})
 
 
 @never_cache

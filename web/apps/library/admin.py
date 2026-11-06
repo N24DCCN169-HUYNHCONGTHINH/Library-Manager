@@ -5,7 +5,7 @@ from django.utils import timezone
 from .models import (
     Book, BookCopy, CirculationPolicy, DamageCase, Fine, FinePayment,
     LibraryClosure, LibraryHours, Loan, LoanEvent, LoanRenewal,
-    LibraryBranch, ReaderRestriction, Reservation,
+    LibraryBranch, ReaderRestriction, Reservation, LoanNotification,
 )
 
 
@@ -21,8 +21,22 @@ class BookAdmin(admin.ModelAdmin):
     list_display = ("catalog_number", "title", "authors", "material_type", "loan_mode", "available_copies", "is_active")
     list_filter = ("material_type", "loan_mode", "is_active")
     search_fields = ("catalog_number", "isbn", "title", "authors", "publisher")
-    readonly_fields = ("created_by", "updated_by", "created_at", "updated_at")
-    actions = ("deactivate_books",)
+    readonly_fields = ("created_by", "updated_by", "created_at", "updated_at", "replacement_price_approved_by", "replacement_price_approved_at")
+    actions = ("deactivate_books", "approve_prices")
+
+    @admin.action(description="Xác nhận giá thay thế có đủ nguồn và ngày kiểm tra", permissions=["approve_price"])
+    def approve_prices(self, request, queryset):
+        for book in queryset:
+            if book.replacement_price is None or not book.replacement_price_source.strip() or not book.replacement_price_checked_at:
+                self.message_user(request, f"{book.catalog_number}: cần đủ giá, nguồn và ngày kiểm tra.", level="ERROR")
+                continue
+            book.replacement_price_approved_by = request.user
+            book.replacement_price_approved_at = timezone.now()
+            book.save(update_fields=["replacement_price_approved_by", "replacement_price_approved_at"])
+            self.log_change(request, book, "Đã xác nhận giá thay thế có căn cứ.")
+
+    def has_approve_price_permission(self, request):
+        return request.user.has_perm("library.approve_damagecase")
 
     def save_model(self, request, obj, form, change):
         if not change:
@@ -202,3 +216,4 @@ class AuditRecordAdmin(admin.ModelAdmin):
 
 admin.site.register(LoanRenewal, AuditRecordAdmin)
 admin.site.register(LoanEvent, AuditRecordAdmin)
+admin.site.register(LoanNotification, AuditRecordAdmin)
