@@ -41,8 +41,9 @@ def dashboard_context(user, params):
         previous = loans.filter(loaned_at__gte=aware(start - (end-start)), loaned_at__lt=aware(start)).count()
         metrics.append({"label": "Lượt mượn trong kỳ", "value": current,
                         "note": f"Kỳ trước cùng độ dài: {previous} lượt", "featured": True})
-        metrics.append({"label": "Lượt đang quá hạn", "value": loans.filter(status="open", due_at__lt=timezone.now()).count(),
-                        "note": "Hiện tại · cần theo dõi tại quầy", "warning": True})
+        metrics.append({"label": "Lượt trả trong kỳ", "value": loans.filter(returned_at__gte=aware(start), returned_at__lt=aware(end)).count(),
+                        "note": "Theo ngày xác nhận nhận trả"})
+        context["current_overdue"] = loans.filter(status="open", due_at__lt=timezone.now()).count()
         trunc = TruncMonth if period == "year" else TruncDate
         rows = loans.filter(loaned_at__gte=aware(start), loaned_at__lt=aware(end)).annotate(bucket=trunc("loaned_at")).values("bucket").annotate(total=Count("pk"))
         counts = {(r["bucket"].date() if isinstance(r["bucket"], datetime) else r["bucket"]): r["total"] for r in rows}
@@ -55,7 +56,7 @@ def dashboard_context(user, params):
         for point in points:
             point["height"] = round(point["count"] * 100 / maximum)
         context.update(chart_points=points, chart_total=current, chart_max=maximum,
-                       recent_loans=loans.select_related("reader__user", "copy__book").order_by("-loaned_at", "-pk")[:8])
+                       recent_loans=loans.filter(loaned_at__gte=aware(start), loaned_at__lt=aware(end)).select_related("reader__user", "copy__book").order_by("-loaned_at", "-pk")[:8])
         dates = [selected + timedelta(days=i) for i in range(7)]
         due_counts = {r["bucket"]: r["total"] for r in loans.filter(status="open", due_at__gte=aware(dates[0]), due_at__lt=aware(dates[-1]+timedelta(days=1))).annotate(bucket=TruncDate("due_at")).values("bucket").annotate(total=Count("pk"))}
         weekdays = ["T2", "T3", "T4", "T5", "T6", "T7", "CN"]
@@ -64,7 +65,8 @@ def dashboard_context(user, params):
     if user.has_perm("core.view_readerprofile"):
         metrics.append({"label": "Độc giả mới trong kỳ", "value": ReaderProfile.objects.filter(created_at__gte=aware(start), created_at__lt=aware(end)).count(), "note": "Hồ sơ được tạo trong khoảng đã chọn"})
     if user.has_perm("library.view_book"):
-        metrics.append({"label": "Đầu sách đang sử dụng", "value": Book.objects.filter(is_active=True).count(), "note": "Toàn bộ danh mục hiện tại"})
+        metrics.append({"label": "Đầu sách bổ sung trong kỳ", "value": Book.objects.filter(created_at__gte=aware(start), created_at__lt=aware(end)).count(), "note": "Theo ngày tạo đầu sách"})
+        context["current_books"] = Book.objects.filter(is_active=True).count()
     if user.has_perm("library.view_bookcopy"):
         total = BookCopy.objects.filter(is_active=True).count()
         available = BookCopy.objects.filter(status="available", is_active=True, book__is_active=True).count()

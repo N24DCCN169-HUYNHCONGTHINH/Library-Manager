@@ -16,6 +16,8 @@ from django.db.models import F, Q
 from django.http import HttpResponseBadRequest, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
+from django.utils.http import url_has_allowed_host_and_scheme
+from django.urls import reverse
 from django.views.decorators.cache import never_cache
 from django_otp import login as otp_login
 from django_otp.plugins.otp_totp.models import TOTPDevice
@@ -69,6 +71,25 @@ def has_staff_role(user):
     return user.is_authenticated and (user.is_superuser or user.groups.filter(name__in=STAFF_ROLES).exists())
 
 
+def _staff_destination(request):
+    destination = request.session.pop("staff_mfa_next", "")
+    if (destination and url_has_allowed_host_and_scheme(destination, {request.get_host()}, require_https=request.is_secure())
+            and "/accounts/" not in destination):
+        return destination
+    return reverse("staff_dashboard")
+
+
+class RoleAwareLoginView(auth_views.LoginView):
+    def get_success_url(self):
+        destination = self.get_redirect_url()
+        if has_staff_role(self.request.user):
+            if not getattr(self.request.user, "is_verified", lambda: False)():
+                self.request.session["staff_mfa_next"] = destination or reverse("staff_dashboard")
+                return reverse("otp_verify" if TOTPDevice.objects.filter(user=self.request.user, confirmed=True).exists() else "otp_setup")
+            return destination or reverse("staff_dashboard")
+        return destination or (reverse("reader_portal") if self.request.user.groups.filter(name="reader").exists() else reverse("home"))
+
+
 def staff_mfa_required(view):
     @wraps(view)
     @login_required
@@ -76,6 +97,7 @@ def staff_mfa_required(view):
         if not has_staff_role(request.user):
             return redirect("home")
         if not request.user.is_verified():
+            request.session["staff_mfa_next"] = request.get_full_path()
             if TOTPDevice.objects.filter(user=request.user, confirmed=True).exists():
                 return redirect("otp_verify")
             return redirect("otp_setup")
@@ -259,7 +281,7 @@ def otp_setup(request):
     if not has_staff_role(request.user):
         return redirect("home")
     if request.user.is_verified():
-        return redirect("staff_dashboard")
+        return redirect(_staff_destination(request))
     if TOTPDevice.objects.filter(user=request.user, confirmed=True).exists():
         return redirect("otp_verify")
 
@@ -284,7 +306,7 @@ def otp_setup(request):
                 locked_device.save(update_fields=["confirmed", "last_t"])
                 otp_login(request, locked_device)
                 record_security_event(request.user, AccountSecurityEvent.Kind.TOTP_ENROLLED, request.user, {"device_name": locked_device.name})
-                return redirect("staff_dashboard")
+                return redirect(_staff_destination(request))
         form.add_error("code", "Mã không hợp lệ hoặc đã hết hạn. Hãy thử mã mới.")
     return render(request, "registration/otp_setup.html", {"form": form, "secret": secret, "otpauth_uri": otpauth_uri})
 
@@ -295,7 +317,7 @@ def otp_verify(request):
     if not has_staff_role(request.user):
         return redirect("home")
     if request.user.is_verified():
-        return redirect("staff_dashboard")
+        return redirect(_staff_destination(request))
     devices = TOTPDevice.objects.filter(user=request.user, confirmed=True)
     if not devices.exists():
         return redirect("otp_setup")
@@ -307,7 +329,7 @@ def otp_verify(request):
             )
             if locked_device.verify_token(form.cleaned_data["code"]):
                 otp_login(request, locked_device)
-                return redirect("staff_dashboard")
+                return redirect(_staff_destination(request))
         form.add_error("code", "Mã không hợp lệ hoặc đã hết hạn. Hãy thử mã mới.")
     return render(request, "registration/otp_verify.html", {"form": form})
 

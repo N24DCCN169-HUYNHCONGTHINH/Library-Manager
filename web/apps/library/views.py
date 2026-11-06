@@ -3,16 +3,18 @@ from django.contrib.auth.decorators import login_required, user_passes_test
 from django.core.exceptions import ObjectDoesNotExist
 from django.core.paginator import Paginator
 from django.db.models import Count, Exists, OuterRef, Prefetch, Q
-from django.http import HttpResponseForbidden
+from django.http import HttpResponseForbidden, JsonResponse
+from django.template.loader import render_to_string
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
+from django.urls import reverse
 from django.views.decorators.cache import never_cache
 from django.views.decorators.http import require_POST
 
 from apps.core.models import ReaderProfile
 from apps.core.views import has_role, staff_mfa_required
 from .forms import BookForm, CheckoutForm, FinePaymentForm, ReturnForm, RenewalForm, ReopenReaderForm
-from .models import Book, BookCopy, Fine, LibraryBranch, Loan, Reservation
+from .models import Book, BookCopy, DamageCase, Fine, LibraryBranch, Loan, LoanNotification, Reservation
 from .services import CirculationError, cancel_reservation, checkout_copy, place_reservation, record_fine_payment, renew_loan, return_copy, expire_ready_reservations
 from .services import reopen_reader
 from .forms import DamageQuoteForm
@@ -125,10 +127,18 @@ def catalog(request):
     })
 
 
+@never_cache
 @staff_mfa_required
 def circulation_desk(request):
     if not (request.user.is_superuser or (request.user.has_perm("library.view_loan") and request.user.has_perm("library.view_fine"))):
         return HttpResponseForbidden("Bạn không được cấp quyền xem quầy lưu thông.")
+    tabs = {"checkout", "return", "loans", "renew", "damage", "overdue", "notices", "reservations", "fines"}
+    action_tabs = {"checkout": "checkout", "return": "return", "renew": "renew", "payment": "fines", "reopen": "overdue", "expire": "reservations"}
+    active_tab = request.GET.get("tab", "checkout")
+    if request.method == "POST":
+        active_tab = action_tabs.get(request.POST.get("action"), "checkout")
+    if active_tab not in tabs:
+        active_tab = "checkout"
     checkout_initial = {"barcode": request.GET.get("barcode", "")[:64]} if request.method == "GET" else {}
     checkout_form = CheckoutForm(request.POST if request.method == "POST" and request.POST.get("action") == "checkout" else None, initial=checkout_initial, auto_id="checkout_%s")
     return_form = ReturnForm(request.POST if request.method == "POST" and request.POST.get("action") == "return" else None, auto_id="return_%s")
@@ -152,8 +162,12 @@ def circulation_desk(request):
                 return HttpResponseForbidden("Bạn không được cấp quyền thực hiện thao tác này.")
             elif action == "expire":
                 count = expire_ready_reservations()
+                if request.headers.get("Accept") == "application/json":
+                    reservations = Reservation.objects.select_related("reader", "book", "copy", "notification").filter(status__in=["waiting", "ready"]).order_by("created_at", "pk")[:50]
+                    html = render_to_string("library/partials/reservation_rows.html", {"reservations": reservations}, request=request)
+                    return JsonResponse({"message": f"Đã kiểm tra: {count} yêu cầu hết hạn được xử lý.", "html": html})
                 messages.success(request, f"Đã xử lý {count} yêu cầu hết hạn giữ chỗ.")
-                return redirect("library:circulation_desk")
+                return redirect(reverse("library:circulation_desk") + "?tab=reservations")
             elif forms[action].is_valid():
                 data = forms[action].cleaned_data
                 if action == "reopen":
@@ -171,16 +185,20 @@ def circulation_desk(request):
                 else:
                     row = record_fine_payment(data["fine_id"], data["amount"], request.user, reason=data["reason"], idempotency_key=data["idempotency_key"])
                     messages.success(request, f"Đã ghi nhận thanh toán. Biên nhận: {row.receipt_number}.")
-                return redirect("library:circulation_desk")
+                return redirect(reverse("library:circulation_desk") + "?tab=" + active_tab)
         except (CirculationError, ObjectDoesNotExist) as exc:
             if action in forms:
                 forms[action].add_error(None, str(exc) if isinstance(exc, CirculationError) else "Không tìm thấy độc giả, bản sách hoặc lượt giao dịch.")
             else:
                 messages.error(request, str(exc))
-    loans = Loan.objects.filter(status=Loan.Status.OPEN).select_related("reader", "copy__book").order_by("due_at")[:50]
-    unpaid_fines = Fine.objects.filter(status=Fine.Status.DUE).select_related("loan__reader", "loan__copy__book").order_by("calculated_at")[:50]
+    loans = list(Loan.objects.filter(status=Loan.Status.OPEN).select_related("reader", "copy__book").order_by("due_at")[:50])
+    overdue_loans = [loan for loan in loans if loan.due_at < timezone.now()]
+    unpaid_fines = Fine.objects.filter(status=Fine.Status.DUE).select_related("loan__reader", "loan__copy__book").prefetch_related("transactions").order_by("calculated_at")[:50]
     reservations = Reservation.objects.select_related("reader", "book", "copy", "notification").filter(status__in=[Reservation.Status.WAITING, Reservation.Status.READY]).order_by("created_at", "pk")[:50]
-    return render(request, "library/circulation_desk.html", {"checkout_form": checkout_form, "return_form": return_form, "payment_form": payment_form, "renewal_form": renewal_form, "reopen_form": reopen_form, "loans": loans, "unpaid_fines": unpaid_fines, "reservations": reservations})
+    return render(request, "library/circulation_desk.html", {"checkout_form": checkout_form, "return_form": return_form, "payment_form": payment_form, "renewal_form": renewal_form, "reopen_form": reopen_form, "loans": loans, "overdue_loans": overdue_loans, "active_tab": active_tab,
+        "damage_cases": DamageCase.objects.select_related("loan__copy__book", "loan__reader").order_by("-reported_at")[:50] if request.user.has_perm("library.view_damagecase") else [],
+        "loan_notices": LoanNotification.objects.select_related("loan__copy__book", "loan__reader").order_by("-created_at")[:50] if request.user.has_perm("library.view_loannotification") else [],
+        "unpaid_fines": unpaid_fines, "reservations": reservations})
 
 
 @never_cache

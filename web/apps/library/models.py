@@ -331,10 +331,16 @@ class Fine(models.Model):
 
     @property
     def balance(self):
-        paid = self.transactions.filter(kind=FinePayment.Kind.PAYMENT).aggregate(total=models.Sum("amount"))["total"] or 0
-        waived = self.transactions.filter(kind=FinePayment.Kind.WAIVER).aggregate(total=models.Sum("amount"))["total"] or 0
-        refunded = self.transactions.filter(kind=FinePayment.Kind.REFUND).aggregate(total=models.Sum("amount"))["total"] or 0
-        adjustments = self.transactions.filter(kind=FinePayment.Kind.ADJUSTMENT).aggregate(total=models.Sum("amount"))["total"] or 0
+        cached = getattr(self, "_prefetched_objects_cache", {}).get("transactions")
+        if cached is not None:
+            net = sum((-row.amount if row.kind in {FinePayment.Kind.PAYMENT, FinePayment.Kind.WAIVER} else row.amount) for row in cached)
+            return max(0, self.accrued_amount + net)
+        totals = self.transactions.aggregate(
+            paid=models.Sum("amount", filter=Q(kind=FinePayment.Kind.PAYMENT)),
+            waived=models.Sum("amount", filter=Q(kind=FinePayment.Kind.WAIVER)),
+            refunded=models.Sum("amount", filter=Q(kind=FinePayment.Kind.REFUND)),
+            adjustments=models.Sum("amount", filter=Q(kind=FinePayment.Kind.ADJUSTMENT)))
+        paid, waived, refunded, adjustments = (totals[key] or 0 for key in ("paid", "waived", "refunded", "adjustments"))
         return max(0, self.accrued_amount - paid + refunded - waived + adjustments)
 
 

@@ -39,7 +39,7 @@ class Day11AccountJourneyTests(TestCase):
 
     def login_reader(self):
         response = self.client.post(reverse("login"), {"username": self.user.username, "password": self.password})
-        self.assertRedirects(response, reverse("home"))
+        self.assertRedirects(response, reverse("reader_portal"))
 
     def test_activation_email_change_and_account_disable_reactivate(self):
         self.activate()

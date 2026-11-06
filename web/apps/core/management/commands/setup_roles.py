@@ -42,6 +42,7 @@ class Command(BaseCommand):
             "view_book", "view_bookcopy", "view_librarybranch", "view_loan", "view_loanrenewal",
             "view_loanevent", "view_reservation", "view_fine", "view_finepayment",
             "view_readerrestriction", "view_damagecase",
+            "view_loannotification",
         }
         circulation_actions = {
             "checkout_loan", "return_loan", "renew_loan", "collect_finepayment",

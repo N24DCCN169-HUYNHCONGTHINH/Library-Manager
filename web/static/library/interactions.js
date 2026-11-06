@@ -3,6 +3,47 @@
   'use strict';
   const endpoint = document.body.dataset.lookupUrl;
   if (!endpoint) return;
+  const desk = document.getElementById('desk-workspace');
+  if (desk) {
+    const legacy = {'open-loans':'loans',reservations:'reservations',fines:'fines'};
+    const panels = [...desk.querySelectorAll('[data-desk-panel]')];
+    const activate = (name, push=false) => {
+      if (!panels.some(panel => panel.dataset.deskPanel === name)) name = 'checkout';
+      panels.forEach(panel => { panel.hidden = panel.dataset.deskPanel !== name; });
+      document.querySelectorAll('[data-desk-tab]').forEach(link => {
+        if (link.dataset.deskTab === name) link.setAttribute('aria-current','page'); else link.removeAttribute('aria-current');
+      });
+      desk.dataset.activeTab = name;
+      if (push) { const url = new URL(location.href); url.searchParams.set('tab',name); url.hash=''; if(url.href!==location.href)history.pushState({},'',url); }
+    };
+    activate(legacy[location.hash.slice(1)] || desk.dataset.activeTab);
+    document.querySelectorAll('[data-desk-tab]').forEach(link => link.addEventListener('click',event => {
+      if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+      event.preventDefault(); activate(link.dataset.deskTab,true);
+      const fromMenu = link.closest('[data-circulation-menu]');
+      document.querySelectorAll('[data-circulation-menu]').forEach(menu => {menu.open=false;});
+      if(fromMenu) panels.find(panel=>!panel.hidden)?.querySelector('input:not([type=hidden]),a,button')?.focus({preventScroll:true});
+    }));
+    window.addEventListener('popstate',()=>activate(legacy[location.hash.slice(1)] || new URLSearchParams(location.search).get('tab') || 'checkout'));
+    desk.querySelectorAll('.desk-action-form').forEach(form => {
+      form.addEventListener('submit',()=>{ form.setAttribute('aria-busy','true'); form.querySelectorAll('button[type="submit"]').forEach(button=>{button.disabled=true;button.textContent='Đang xử lý…';}); });
+    });
+    desk.querySelectorAll('[data-async-expire]').forEach(form => form.addEventListener('submit',async event=>{
+      event.preventDefault(); const button=form.querySelector('button'); if(button.disabled)return;
+      const status=form.querySelector('[data-expire-status]');button.disabled=true;form.setAttribute('aria-busy','true');status.textContent='Đang kiểm tra hàng chờ…';
+      try {
+        const response=await fetch(form.action || location.href,{method:'POST',body:new FormData(form),credentials:'same-origin',headers:{Accept:'application/json'}});
+        if(!response.ok || response.redirected)throw new Error('update');
+        const data=await response.json();
+        // HTML comes only from the authenticated, same-origin Django template,
+        // whose record values are escaped by the server.
+        document.getElementById('reservation-results').innerHTML=data.html;status.textContent=data.message;
+      } catch(_){status.textContent='Chưa xác nhận được kết quả. Hãy kiểm tra kết nối hoặc tải lại mục Đặt trước; hệ thống không tự gửi lại thao tác.';}
+      finally {button.disabled=false;form.removeAttribute('aria-busy');}
+    }));
+  }
+  document.addEventListener('keydown',event=>{if(event.key==='Escape')document.querySelectorAll('[data-circulation-menu][open]').forEach(menu=>{menu.open=false;menu.querySelector('summary').focus();});});
+  document.addEventListener('pointerdown',event=>document.querySelectorAll('[data-circulation-menu]').forEach(menu=>{if(!menu.contains(event.target))menu.open=false;}));
   let serial = 0;
   document.querySelectorAll('input[data-lookup]').forEach(input => {
     const wrapper = document.createElement('div');

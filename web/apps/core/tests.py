@@ -39,7 +39,7 @@ class AccountAccessAcceptanceTests(TestCase):
             reverse("login"),
             {"username": self.reader.username, "password": "Test-password-123!"},
         )
-        self.assertRedirects(response, reverse("home"))
+        self.assertRedirects(response, reverse("reader_portal"))
 
         self.client.logout()
         response = self.client.post(
