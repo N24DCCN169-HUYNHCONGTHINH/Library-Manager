@@ -32,7 +32,8 @@ def profile(request):
     form = ProfileForm(request.POST if request.method == "POST" else None, instance=request.user)
     if request.method == "POST" and form.is_valid():
         with transaction.atomic():
-            form.save()
+            profile_user = form.save(commit=False)
+            profile_user.save(update_fields=["first_name", "last_name"])
             record_security_event(request.user, AccountSecurityEvent.Kind.PROFILE_UPDATED, request.user, reason="Tự sửa hồ sơ")
         messages.success(request, "Đã lưu hồ sơ của bạn.")
         return redirect("profile")
@@ -100,7 +101,7 @@ def account_detail(request, user_id):
     can_edit = request.user.has_perm("core.manage_account_lifecycle")
     can_email = can_edit and (request.user.pk == subject.pk or request.user.is_superuser or not protected_user(subject))
     form = AccountEditForm(instance=subject, actor=request.user)
-    email_form = ManagedEmailForm()
+    email_form = ManagedEmailForm(auto_id="email_%s")
     if request.method == "POST":
         if not can_edit: return HttpResponseForbidden()
         action = request.POST.get("action", "profile")
@@ -109,7 +110,7 @@ def account_detail(request, user_id):
                 subject = User.objects.select_for_update().get(pk=subject.pk)
                 if action == "email":
                     if not can_email: return HttpResponseForbidden()
-                    email_form = ManagedEmailForm(request.POST)
+                    email_form = ManagedEmailForm(request.POST, auto_id="email_%s")
                     if email_form.is_valid():
                         verification = issue_email_confirmation(user=subject, email=email_form.cleaned_data["email"], request=request, actor=request.user)
                         record_security_event(subject, AccountSecurityEvent.Kind.PROFILE_UPDATED, request.user, {"email_request": verification.pk}, reason=email_form.cleaned_data["reason"])
