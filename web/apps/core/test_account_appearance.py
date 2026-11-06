@@ -50,10 +50,11 @@ class AccountAppearanceTests(TestCase):
         self.assertTrue(self.manager.is_active)
         self.assertEqual(list(self.manager.groups.values_list("name",flat=True)),["library_manager"])
         response=self.client.post(reverse("account_detail",args=[self.other.pk]),{"username":"worker", "roles":["library_manager"], "is_active":"on", "reason":"test"})
-        self.assertContains(response,"errorlist")
+        self.assertEqual(response.status_code,302)
         self.assertFalse(self.other.groups.filter(name="library_manager").exists())
 
     def test_edit_and_audit_normal_staff(self):
+        self.manager.groups.add(Group.objects.get(name="system_admin"))
         self.login_manager()
         response=self.client.post(reverse("account_detail",args=[self.other.pk]),{"username":"worker", "first_name":"Updated", "roles":["circulation_staff"], "is_active":"on", "reason":"Đổi công việc"})
         self.assertEqual(response.status_code,302)

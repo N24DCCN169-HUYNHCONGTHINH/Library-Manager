@@ -6,6 +6,7 @@ from functools import wraps
 from urllib.parse import quote
 
 from django import forms
+from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required, user_passes_test
 from django.contrib.auth import views as auth_views
@@ -81,7 +82,24 @@ def _staff_destination(request):
 
 class RoleAwareLoginView(auth_views.LoginView):
     def get_success_url(self):
+        from .models import SystemConfiguration
+        duration = SystemConfiguration.objects.filter(pk=1).values_list("session_minutes", flat=True).first()
+        if duration in {30, 60, 120, 240, 480}:
+            self.request.session.set_expiry(min(duration * 60, settings.SESSION_COOKIE_AGE))
         destination = self.get_redirect_url()
+        from .email_otp import verified_email, send_code
+        if verified_email(self.request.user):
+            self.request.session.pop("otp_device_id", None)
+            self.request.user.otp_device = None
+            fallback = reverse("staff_dashboard") if has_staff_role(self.request.user) else reverse("reader_portal") if self.request.user.groups.filter(name="reader").exists() else reverse("profile")
+            self.request.session["email_otp_pending"] = True
+            self.request.session["email_otp_next"] = destination or fallback
+            self.request.session["staff_mfa_next"] = destination or fallback
+            try:
+                send_code(self.request)
+            except ValidationError as exc:
+                messages.error(self.request, str(exc.messages[0]))
+            return reverse("email_otp_verify")
         if has_staff_role(self.request.user):
             if not getattr(self.request.user, "is_verified", lambda: False)():
                 self.request.session["staff_mfa_next"] = destination or reverse("staff_dashboard")
@@ -131,11 +149,11 @@ def reader_portal(request):
     if profile:
         from apps.library.models import Fine, Loan, Reservation
         from apps.library.models import LoanNotification
-        loan_notifications = LoanNotification.objects.filter(loan__reader=profile, loan__status="open", due_at=F("loan__due_at")).select_related("loan__copy__book").order_by("-created_at")[:10]
+        loan_notifications = LoanNotification.objects.filter(loan__reader=profile, loan__status="open", due_at=F("loan__due_at")).select_related("loan__copy__book").defer('loan__copy__book__cover_image').order_by("-created_at")[:10]
         now = timezone.now()
         own_loans = Loan.objects.filter(reader=profile)
         own_reservations = Reservation.objects.filter(reader=profile)
-        own_fines = Fine.objects.filter(loan__reader=profile).select_related("loan__copy__book").order_by("-calculated_at", "-pk")
+        own_fines = Fine.objects.filter(loan__reader=profile).select_related("loan__copy__book").defer('loan__copy__book__cover_image').order_by("-calculated_at", "-pk")
         summary = {"open_loans": own_loans.filter(status=Loan.Status.OPEN).count(),
                    "overdue_loans": own_loans.filter(status=Loan.Status.OPEN, due_at__lt=now).count(),
                    "active_reservations": own_reservations.filter(status__in=["waiting", "ready"]).count(),
@@ -144,7 +162,7 @@ def reader_portal(request):
             own_loans = own_loans.filter(status=loan_status)
         else:
             loan_status = ""
-        loans = Paginator(own_loans.select_related("copy__book", "copy__branch", "policy")
+        loans = Paginator(own_loans.select_related("copy__book", "copy__branch", "policy").defer('copy__book__cover_image')
                           .order_by("-loaned_at", "-pk"), 20).get_page(request.GET.get("loan_page"))
         for loan in loans:
             loan.is_overdue = loan.status == Loan.Status.OPEN and loan.due_at < now
@@ -161,7 +179,7 @@ def reader_portal(request):
             else:
                 loan.can_request_renewal = loan.due_at >= now and loan.due_at - now <= timedelta(hours=48)
                 loan.renewal_message = "Có thể gửi yêu cầu; hệ thống sẽ kiểm tra lại tình trạng thẻ và điều kiện giao dịch."
-        reservations = Paginator(own_reservations.select_related("book", "copy__branch")
+        reservations = Paginator(own_reservations.select_related("book", "copy__branch").defer('book__cover_image')
                                  .order_by("-created_at", "-pk"), 20).get_page(request.GET.get("reservation_page"))
         for reservation in reservations:
             if reservation.status == Reservation.Status.WAITING:
@@ -182,7 +200,7 @@ def reader_portal(request):
 @user_passes_test(has_role("reader"), login_url="home")
 def reader_loan_detail(request, loan_id):
     from apps.library.models import Fine, Loan
-    loan = get_object_or_404(Loan.objects.select_related("copy__book", "copy__branch", "reader"),
+    loan = get_object_or_404(Loan.objects.select_related("copy__book", "copy__branch", "reader").defer('copy__book__cover_image'),
                              pk=loan_id, reader__user=request.user)
     fine = Fine.objects.filter(loan=loan).first()
     return render(request, "core/reader_loan_detail.html", {"loan": loan, "fine": fine,
@@ -305,6 +323,7 @@ def otp_setup(request):
                 locked_device.confirmed = True
                 locked_device.save(update_fields=["confirmed", "last_t"])
                 otp_login(request, locked_device)
+                request.session.pop("email_otp_pending", None)
                 record_security_event(request.user, AccountSecurityEvent.Kind.TOTP_ENROLLED, request.user, {"device_name": locked_device.name})
                 return redirect(_staff_destination(request))
         form.add_error("code", "Mã không hợp lệ hoặc đã hết hạn. Hãy thử mã mới.")
@@ -329,6 +348,7 @@ def otp_verify(request):
             )
             if locked_device.verify_token(form.cleaned_data["code"]):
                 otp_login(request, locked_device)
+                request.session.pop("email_otp_pending", None)
                 return redirect(_staff_destination(request))
         form.add_error("code", "Mã không hợp lệ hoặc đã hết hạn. Hãy thử mã mới.")
     return render(request, "registration/otp_verify.html", {"form": form})

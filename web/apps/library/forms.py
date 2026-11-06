@@ -6,6 +6,20 @@ from .models import Book
 
 
 class BookForm(forms.ModelForm):
+    cover = forms.FileField(label="Ảnh bìa (JPG/PNG/WebP, tối đa 2 MB)", required=False)
+    remove_cover = forms.BooleanField(label="Xóa ảnh bìa hiện tại", required=False)
+    def clean_cover(self):
+        from apps.core.account_forms import AppearanceForm
+        return AppearanceForm._image(self, "cover", 2, (600, 800))
+    def save(self, commit=True):
+        obj = super().save(commit=False)
+        if self.cleaned_data.get("remove_cover"):
+            obj.cover_image=b"";obj.has_cover=False
+        elif self.cleaned_data.get("cover"):
+            obj.cover_image=self.cleaned_data["cover"];obj.has_cover=True
+        if commit: obj.save()
+        return obj
+
     class Meta:
         model = Book
         fields = ["catalog_number", "isbn", "title", "subtitle", "authors", "subjects", "publisher",

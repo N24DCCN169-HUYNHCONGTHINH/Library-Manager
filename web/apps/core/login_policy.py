@@ -11,3 +11,15 @@ def testing_lockout_exemption(request, credentials=None):
     return AccountSecurity.objects.filter(
         user__username=username, user__is_active=True, password_lockout_exempt=True,
     ).exists()
+
+
+def configured_failure_limit(request, credentials=None):
+    from .models import SystemConfiguration
+    value=SystemConfiguration.objects.filter(pk=1).values_list("login_failure_limit",flat=True).first()
+    return value if value in {3,4,5} else 5
+
+def configured_cooloff(request):
+    from datetime import timedelta
+    from .models import SystemConfiguration
+    value=SystemConfiguration.objects.filter(pk=1).values_list("lockout_minutes",flat=True).first()
+    return timedelta(minutes=value if value in {15,30,60} else 15)

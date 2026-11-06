@@ -1,10 +1,23 @@
 from django.urls import path
 
-from . import views
+from . import views, management_views, reports, payments
 from .lookup import lookup
 
 app_name = "library"
 urlpatterns = [
+    path("staff/reports/", reports.reports, name="reports"),
+    path("staff/policies/", management_views.policies, name="policies"),
+    path("staff/waivers/", management_views.waivers, name="waivers"),
+    path("staff/books/<int:book_id>/copies/", management_views.copies, name="copies"),
+    path("staff/books/<int:book_id>/copies/<int:copy_id>/", management_views.copies, name="copy_edit"),
+    path("staff/books/<int:book_id>/retire/", management_views.retire_book, name="retire_book"),
+    path("covers/<int:book_id>/", management_views.cover_image, name="cover_image"),
+    path("payments/fines/<int:fine_id>/", payments.payment_start, name="payment_start"),
+    path("payments/", payments.payment_history, name="payment_history"),
+    path("payments/<uuid:order_id>/", payments.payment_detail, name="payment_detail"),
+    path("payments/<uuid:order_id>/simulate/", payments.simulate_payment, name="simulate_payment"),
+    path("payments/vnpay/ipn/", payments.vnpay_ipn, name="vnpay_ipn"),
+    path("payments/momo/ipn/", payments.momo_ipn, name="momo_ipn"),
     path("lookup/", lookup, name="lookup"),
     path("staff/loans/<int:loan_id>/", views.staff_loan_detail, name="staff_loan_detail"),
     path("staff/damage/quote/", views.damage_quote, name="damage_quote"),

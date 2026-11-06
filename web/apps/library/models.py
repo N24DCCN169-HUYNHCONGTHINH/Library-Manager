@@ -1,3 +1,5 @@
+import uuid
+
 from django.conf import settings
 from django.core.validators import MinValueValidator, RegexValidator
 from django.db import models
@@ -62,6 +64,8 @@ class Book(models.Model):
 
     catalog_number = models.CharField(max_length=40, unique=True, validators=[RegexValidator(r"^[A-Za-z0-9._/-]+$")])
     isbn = models.CharField(max_length=20, blank=True, null=True, unique=True)
+    cover_image = models.BinaryField(blank=True, default=bytes)
+    has_cover = models.BooleanField(default=False)
     title = models.CharField(max_length=300, db_index=True)
     subtitle = models.CharField(max_length=300, blank=True)
     authors = models.CharField(max_length=500, blank=True, db_index=True)
@@ -84,11 +88,11 @@ class Book(models.Model):
 
     class Meta:
         ordering = ["title", "edition"]
-        permissions = [("manage_catalog", "Can manage library catalog")]
+        permissions = [("manage_catalog", "Can manage library catalog"), ("view_system_reports", "Can export combined library reports")]
 
     def save(self, *args, **kwargs):
         if self.pk:
-            old = type(self).objects.get(pk=self.pk)
+            old = type(self).objects.only("replacement_price", "replacement_price_source", "replacement_price_checked_at").get(pk=self.pk)
             price_fields = ("replacement_price", "replacement_price_source", "replacement_price_checked_at")
             if any(getattr(old, key) != getattr(self, key) for key in price_fields):
                 self.replacement_price_approved_by = None
@@ -428,3 +432,38 @@ class LoanNotification(models.Model):
 
     class Meta:
         constraints = [models.UniqueConstraint(fields=["loan", "due_at", "reminder_date"], name="uniq_loan_reminder_date")]
+
+
+class PaymentOrder(models.Model):
+    """Test ledger only: never posts to FinePayment or changes a live balance."""
+    import uuid
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    requester = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="payment_orders")
+    fine = models.ForeignKey(Fine, on_delete=models.PROTECT, related_name="payment_orders")
+    channel = models.CharField(max_length=12, choices=[("bank", "Ngân hàng"), ("momo", "MoMo")])
+    mode = models.CharField(max_length=20, choices=[("simulator", "Mô phỏng nội bộ"), ("momo_sandbox", "MoMo Sandbox"), ("vnpay_sandbox", "VNPAY Sandbox")], default="simulator")
+    amount = models.DecimalField(max_digits=10, decimal_places=0, validators=[MinValueValidator(1)])
+    state = models.CharField(max_length=12, choices=[("pending", "Chờ thanh toán thử"), ("success", "Thành công — giao dịch thử"), ("failed", "Thất bại"), ("cancelled", "Đã hủy"), ("expired", "Hết hạn")], default="pending")
+    request_key = models.UUIDField(unique=True)
+    provider_transaction = models.CharField(max_length=100, null=True, blank=True, unique=True)
+    created_at = models.DateTimeField(default=timezone.now)
+    expires_at = models.DateTimeField()
+    completed_at = models.DateTimeField(null=True, blank=True)
+    result_code = models.CharField(max_length=30, blank=True)
+    provider_pay_url = models.URLField(max_length=1500, blank=True)
+    class Meta:
+        ordering = ["-created_at"]
+
+class FineWaiverRequest(models.Model):
+    request_key = models.UUIDField(default=uuid.uuid4, unique=True)
+    kind = models.CharField(max_length=12, choices=[("waiver","Miễn/giảm"),("adjustment","Điều chỉnh tăng có căn cứ")], default="waiver")
+    fine = models.ForeignKey(Fine, on_delete=models.PROTECT, related_name="waiver_requests")
+    requested_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="requested_waivers")
+    amount = models.DecimalField(max_digits=10, decimal_places=0, validators=[MinValueValidator(1)])
+    reason = models.CharField(max_length=500)
+    state = models.CharField(max_length=12, choices=[("pending", "Chờ duyệt"), ("approved", "Đã duyệt"), ("rejected", "Từ chối")], default="pending")
+    reviewed_by = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.PROTECT, related_name="reviewed_waivers")
+    review_reason = models.CharField(max_length=500, blank=True)
+    payment = models.OneToOneField(FinePayment, null=True, blank=True, on_delete=models.PROTECT)
+    created_at = models.DateTimeField(default=timezone.now)
+    reviewed_at = models.DateTimeField(null=True, blank=True)

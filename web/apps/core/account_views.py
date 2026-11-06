@@ -12,6 +12,7 @@ from django.utils import timezone
 from django.views.decorators.cache import never_cache
 from django.views.decorators.http import require_POST
 from .account_forms import ProfileForm, AccountEditForm, AppearanceForm, ManagedEmailForm, ROLE_CHOICES, protected_user
+from .roles import ALL_ROLES, canonical_roles, can_manage_target
 from .models import AppearancePreferences, AccountSecurityEvent
 from .lifecycle import record_security_event, issue_email_confirmation, issue_account_invitation, set_account_active
 from .lifecycle_forms import AccountInvitationForm
@@ -90,7 +91,7 @@ def account_list(request):
     if status in {"active", "inactive"}: users = users.filter(is_active=status == "active")
     page = Paginator(users, 20).get_page(request.GET.get("page"))
     for account in page:
-        account.role_labels = [dict(ROLE_CHOICES).get(group.name, group.name) for group in account.groups.all()]
+        account.role_labels = [dict(ROLE_CHOICES).get("librarian" if group.name == "library_manager" else group.name, group.name) for group in account.groups.all()]
     return render(request, "core/account_list.html", {"page_obj": page, "query": q, "selected_role": role, "selected_status": status, "roles": ROLE_CHOICES, "total_accounts": User.objects.count(), "active_accounts": User.objects.filter(is_active=True).count()})
 
 @never_cache
@@ -99,7 +100,7 @@ def account_detail(request, user_id):
     if not request.user.has_perm("auth.view_user"): return HttpResponseForbidden()
     subject = get_object_or_404(User.objects.select_related("security_profile").prefetch_related("groups"), pk=user_id)
     can_edit = request.user.has_perm("core.manage_account_lifecycle")
-    can_email = can_edit and (request.user.pk == subject.pk or request.user.is_superuser or not protected_user(subject))
+    can_email = can_edit and (can_manage_target(request.user, subject))
     form = AccountEditForm(instance=subject, actor=request.user)
     email_form = ManagedEmailForm(auto_id="email_%s")
     if request.method == "POST":
@@ -119,13 +120,15 @@ def account_detail(request, user_id):
                 else:
                     form = AccountEditForm(request.POST, instance=subject, actor=request.user)
                     if form.is_valid():
-                        old_roles = set(subject.groups.filter(name__in=dict(ROLE_CHOICES)).values_list("name", flat=True))
+                        old_roles = set(subject.groups.filter(name__in=ALL_ROLES).values_list("name", flat=True))
                         active = subject.is_active
                         obj = form.save(commit=False)
                         obj._security_actor = request.user
                         obj.save(update_fields=["username", "first_name", "last_name"])
                         if not form.restricted:
                             roles = form.cleaned_data["roles"]
+                            if not request.user.has_perm("core.assign_account_roles") and not request.user.is_superuser:
+                                roles = old_roles
                             obj.groups.remove(*Group.objects.filter(name__in=old_roles - roles))
                             obj.groups.add(*Group.objects.filter(name__in=roles - old_roles))
                             obj.is_staff = bool(roles - {"reader"}) or obj.is_superuser
@@ -145,7 +148,7 @@ def account_detail(request, user_id):
 @staff_mfa_required
 def account_add(request):
     if not request.user.has_perm("core.issue_account_invitation"): return HttpResponseForbidden()
-    form = AccountInvitationForm(request.POST if request.method == "POST" else None)
+    form = AccountInvitationForm(request.POST if request.method == "POST" else None, actor=request.user)
     if request.method == "POST" and form.is_valid():
         try:
             invitation = issue_account_invitation(actor=request.user, request=request, **form.cleaned_data)

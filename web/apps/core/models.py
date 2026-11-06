@@ -7,6 +7,8 @@ from django.utils import timezone
 
 class AccountSecurityEvent(models.Model):
     class Kind(models.TextChoices):
+        SYSTEM_OPERATION = "system_operation", "Thao tác quản trị hệ thống"
+        REPORT_EXPORTED = "report_exported", "Đã xuất báo cáo"
         PROFILE_UPDATED = "profile_updated", "Đã sửa hồ sơ tài khoản"
         ACCOUNT_CREATED = "account_created", "Đã tạo tài khoản"
         ROLE_CHANGED = "role_changed", "Đã đổi vai trò"
@@ -59,6 +61,9 @@ class AccountSecurity(models.Model):
         verbose_name = "bảo mật tài khoản"
         verbose_name_plural = "bảo mật tài khoản"
         permissions = [
+            ("invite_reader", "Can invite reader accounts only"),
+            ("assign_account_roles", "Can assign approved library roles"),
+            ("manage_system_operations", "Can manage technical operations and backups"),
             ("verify_account_email", "Can verify account email"),
             ("issue_account_invitation", "Can issue account invitations"),
             ("manage_account_lifecycle", "Can disable and reactivate accounts"),
@@ -180,3 +185,37 @@ class AppearancePreferences(models.Model):
     has_avatar = models.BooleanField(default=False)
     has_background = models.BooleanField(default=False)
     updated_at = models.DateTimeField(auto_now=True)
+
+
+class SystemConfiguration(models.Model):
+    name = models.CharField(max_length=160, default="Library Hub")
+    notifications_enabled = models.BooleanField(default=True)
+    reminder_days = models.PositiveSmallIntegerField(default=3)
+    support_email = models.EmailField(blank=True)
+    login_failure_limit = models.PositiveSmallIntegerField(default=5, choices=[(3,"3 lần"),(4,"4 lần"),(5,"5 lần")])
+    lockout_minutes = models.PositiveSmallIntegerField(default=15, choices=[(15,"15 phút"),(30,"30 phút"),(60,"60 phút")])
+    session_minutes = models.PositiveSmallIntegerField(default=480, choices=[(30,"30 phút"),(60,"1 giờ"),(120,"2 giờ"),(240,"4 giờ"),(480,"8 giờ")])
+    updated_at = models.DateTimeField(auto_now=True)
+    updated_by = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, on_delete=models.PROTECT)
+
+
+from django_otp.models import Device
+class EmailLoginDevice(Device):
+    email = models.EmailField()
+    class Meta:
+        constraints = [models.UniqueConstraint(fields=["user", "email"], name="unique_login_email_device")]
+    def verify_token(self, token):
+        # Tokens are verified only with the session-bound challenge service.
+        return False
+
+class EmailLoginChallenge(models.Model):
+    import uuid
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
+    email = models.EmailField()
+    session_digest = models.CharField(max_length=64)
+    code_digest = models.CharField(max_length=64)
+    attempts = models.PositiveSmallIntegerField(default=0)
+    created_at = models.DateTimeField(default=timezone.now)
+    expires_at = models.DateTimeField()
+    consumed_at = models.DateTimeField(null=True, blank=True)

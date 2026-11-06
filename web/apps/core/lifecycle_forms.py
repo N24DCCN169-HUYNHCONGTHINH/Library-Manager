@@ -25,6 +25,12 @@ class AccountInvitationForm(forms.Form):
     valid_from = forms.DateField(label="Thẻ có hiệu lực từ", widget=forms.DateInput(attrs={"type": "date"}), required=False)
     valid_until = forms.DateField(label="Thẻ có hiệu lực đến", widget=forms.DateInput(attrs={"type": "date"}), required=False)
 
+    def __init__(self, *args, actor=None, **kwargs):
+        super().__init__(*args, **kwargs)
+        if actor is not None:
+            from .roles import can_assign_roles, ROLE_CHOICES
+            self.fields["role"].choices = ROLE_CHOICES if can_assign_roles(actor) else [r for r in INVITABLE_ROLES if r[0] != "librarian"]
+
     def clean_username(self):
         value = self.cleaned_data["username"].strip()
         username_field = get_user_model()._meta.get_field("username")

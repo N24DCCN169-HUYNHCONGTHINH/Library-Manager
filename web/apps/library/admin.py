@@ -18,10 +18,14 @@ class BookCopyInline(admin.TabularInline):
 
 @admin.register(Book)
 class BookAdmin(admin.ModelAdmin):
+    def has_delete_permission(self, request, obj=None):
+        # delete_book authorizes the audited retirement URL, never cascade deletion.
+        return False
+
     list_display = ("catalog_number", "title", "authors", "material_type", "loan_mode", "available_copies", "is_active")
     list_filter = ("material_type", "loan_mode", "is_active")
     search_fields = ("catalog_number", "isbn", "title", "authors", "publisher")
-    readonly_fields = ("created_by", "updated_by", "created_at", "updated_at", "replacement_price_approved_by", "replacement_price_approved_at")
+    readonly_fields = ("created_by", "updated_by", "created_at", "updated_at", "replacement_price_approved_by", "replacement_price_approved_at", "has_cover")
     actions = ("deactivate_books", "approve_prices")
 
     @admin.action(description="Xác nhận giá thay thế có đủ nguồn và ngày kiểm tra", permissions=["approve_price"])
@@ -54,6 +58,15 @@ class BookAdmin(admin.ModelAdmin):
 
 @admin.register(BookCopy)
 class BookCopyAdmin(admin.ModelAdmin):
+    def has_delete_permission(self, request, obj=None): return False
+    def get_readonly_fields(self, request, obj=None):
+        fields=list(super().get_readonly_fields(request,obj))
+        if obj:
+            fields += ["book"]
+            if obj.status not in {"available","retired","inventory_review"}:
+                fields += ["barcode","branch","home_loan_override","is_active"]
+        return fields
+
     list_display = ("barcode", "book", "branch", "shelf_location", "status", "allows_home_loan", "is_active")
     list_filter = ("branch", "status", "is_active", "book__material_type")
     search_fields = ("barcode", "book__title", "book__catalog_number", "book__isbn")

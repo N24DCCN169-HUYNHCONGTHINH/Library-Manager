@@ -173,6 +173,13 @@ class AccountSecurityAdmin(admin.ModelAdmin):
 
 @admin.register(ReaderProfile)
 class ReaderProfileAdmin(admin.ModelAdmin):
+    def has_add_permission(self, request): return False
+
+    def get_readonly_fields(self, request, obj=None):
+        fields = list(super().get_readonly_fields(request, obj)) + ["user"]
+        fields += ["status"]
+        return fields
+
     list_display = ("reader_number", "user", "reader_type", "status", "valid_until", "membership_verified")
     list_filter = ("reader_type", "status", "membership_verified")
     search_fields = ("reader_number", "user__username", "user__email", "user__first_name", "user__last_name")

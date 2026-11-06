@@ -56,7 +56,7 @@ def dashboard_context(user, params):
         for point in points:
             point["height"] = round(point["count"] * 100 / maximum)
         context.update(chart_points=points, chart_total=current, chart_max=maximum,
-                       recent_loans=loans.filter(loaned_at__gte=aware(start), loaned_at__lt=aware(end)).select_related("reader__user", "copy__book").order_by("-loaned_at", "-pk")[:8])
+                       recent_loans=loans.filter(loaned_at__gte=aware(start), loaned_at__lt=aware(end)).select_related("reader__user", "copy__book").defer('copy__book__cover_image').order_by("-loaned_at", "-pk")[:8])
         dates = [selected + timedelta(days=i) for i in range(7)]
         due_counts = {r["bucket"]: r["total"] for r in loans.filter(status="open", due_at__gte=aware(dates[0]), due_at__lt=aware(dates[-1]+timedelta(days=1))).annotate(bucket=TruncDate("due_at")).values("bucket").annotate(total=Count("pk"))}
         weekdays = ["T2", "T3", "T4", "T5", "T6", "T7", "CN"]

@@ -15,22 +15,25 @@ class Command(BaseCommand):
         parser.add_argument("--send", action="store_true", help="Send/retry pending email reminders.")
 
     def handle(self, *args, **options):
+        from apps.core.models import SystemConfiguration
+        config = SystemConfiguration.objects.filter(pk=1).first()
+        reminder_days = config.reminder_days if config else 3
         today = timezone.localdate()
         prepared = sent = failed = 0
         for loan in Loan.objects.filter(status=Loan.Status.OPEN).iterator():
             due_day = timezone.localtime(loan.due_at).date()
             delta = (today - due_day).days
-            kind = "upcoming" if delta == -3 else "due" if delta == 0 else "overdue" if delta > 0 and delta % 3 == 0 else None
+            kind = "upcoming" if delta == -reminder_days else "due" if delta == 0 else "overdue" if delta > 0 and delta % 3 == 0 else None
             if kind:
                 _, created = LoanNotification.objects.get_or_create(loan=loan, due_at=loan.due_at, reminder_date=today, defaults={"kind": kind})
                 prepared += int(created)
-        if options["send"]:
+        if options["send"] and (config is None or config.notifications_enabled):
             # Serialize delivery per notice. A crash after provider acceptance can still
             # cause a retry; this is an outbox, not an exactly-once email guarantee.
             ids = LoanNotification.objects.filter(sent_at__isnull=True, reminder_date__gte=today - timedelta(days=1)).values_list("pk", flat=True)
             for pk in list(ids):
                 with transaction.atomic():
-                    notice = LoanNotification.objects.select_for_update().select_related("loan__reader__user", "loan__copy__book").get(pk=pk)
+                    notice = LoanNotification.objects.select_for_update().select_related("loan__reader__user", "loan__copy__book").defer('loan__copy__book__cover_image').get(pk=pk)
                     loan = notice.loan
                     if notice.sent_at or loan.status != Loan.Status.OPEN or loan.due_at != notice.due_at:
                         continue

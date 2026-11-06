@@ -32,7 +32,7 @@ def lookup(request):
         branch = request.GET.get("branch", "")
         if kind == "books" and branch.isascii() and branch.isdigit() and len(branch) < 10:
             rows = rows.filter(copies__branch_id=int(branch), copies__is_active=True)
-        rows = rows.filter(Q(title__icontains=query) | Q(authors__icontains=query) | Q(catalog_number__icontains=query) | Q(isbn__icontains=query) | Q(copies__barcode__icontains=query) | Q(copies__shelf_location__icontains=query)).distinct().order_by("title", "pk")[:8]
+        rows = rows.defer("cover_image").filter(Q(title__icontains=query) | Q(authors__icontains=query) | Q(catalog_number__icontains=query) | Q(isbn__icontains=query) | Q(copies__barcode__icontains=query) | Q(copies__shelf_location__icontains=query)).distinct().order_by("title", "pk")[:8]
         for row in rows:
             url = reverse("library:catalog") + "?" + urlencode({"q": row.catalog_number})
             if kind == "books" and branch.isascii() and branch.isdigit() and len(branch) < 10:
@@ -54,20 +54,20 @@ def lookup(request):
                 url = reverse("reader_edit", args=[row.pk])
             results.append({"label": row.user.get_full_name() or row.user.username, "detail": f"{row.reader_number} · {row.get_status_display()}", "value": row.reader_number, "url": url})
     elif kind == "copies":
-        rows = BookCopy.objects.select_related("book", "branch").filter(Q(barcode__icontains=query) | Q(book__title__icontains=query) | Q(book__catalog_number__icontains=query)).order_by("barcode")[:8]
+        rows = BookCopy.objects.select_related("book", "branch").defer('book__cover_image').filter(Q(barcode__icontains=query) | Q(book__title__icontains=query) | Q(book__catalog_number__icontains=query)).order_by("barcode")[:8]
         for row in rows:
             results.append({"label": row.book.title, "detail": f"{row.barcode} · {row.get_status_display()} · {row.branch.name if row.branch else ''}", "value": row.barcode})
     else:
         match = Q(copy__barcode__icontains=query) | Q(copy__book__title__icontains=query) | Q(reader__reader_number__icontains=query)
         if kind == "loans":
-            rows = Loan.objects.filter(status=Loan.Status.OPEN).select_related("copy__book", "reader").filter(match | (Q(pk=int(query)) if query.isascii() and query.isdigit() and len(query) < 10 else Q(pk__isnull=True))).order_by("due_at")[:8]
+            rows = Loan.objects.filter(status=Loan.Status.OPEN).select_related("copy__book", "reader").defer('copy__book__cover_image').filter(match | (Q(pk=int(query)) if query.isascii() and query.isdigit() and len(query) < 10 else Q(pk__isnull=True))).order_by("due_at")[:8]
             for row in rows:
                 results.append({"label": row.copy.book.title, "detail": f"#{row.pk} · {row.copy.barcode} · {row.reader.reader_number}", "value": str(row.pk), "url": reverse("library:staff_loan_detail", args=[row.pk])})
         else:
             match = Q(loan__copy__barcode__icontains=query) | Q(loan__copy__book__title__icontains=query) | Q(loan__reader__reader_number__icontains=query)
             if query.isascii() and query.isdigit() and len(query) < 10:
                 match |= Q(pk=int(query))
-            rows = Fine.objects.select_related("loan__copy__book", "loan__reader").filter(match).annotate(
+            rows = Fine.objects.select_related("loan__copy__book", "loan__reader").defer('loan__copy__book__cover_image').filter(match).annotate(
                 net_transactions=Sum(Case(When(transactions__kind__in=["payment", "waiver"], then=-F("transactions__amount")),
                     default=F("transactions__amount"), output_field=DecimalField(max_digits=14, decimal_places=0)), default=Decimal(0))
             ).order_by("-calculated_at")[:8]

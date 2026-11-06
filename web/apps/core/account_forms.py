@@ -6,11 +6,7 @@ from django.core.exceptions import ValidationError
 from .models import AppearancePreferences
 
 User = get_user_model()
-ROLE_CHOICES = [("reader", "Độc giả"), ("cataloger", "Biên mục"), ("circulation_staff", "Nhân viên mượn/trả"), ("librarian", "Thủ thư"), ("library_manager", "Quản lý thư viện"), ("system_admin", "Quản trị hệ thống")]
-PRIVILEGED = {"library_manager", "system_admin"}
-
-def protected_user(user):
-    return user.is_superuser or user.groups.filter(name__in=PRIVILEGED).exists()
+from .roles import ROLE_CHOICES, PRIVILEGED, ALL_ROLES, canonical_roles, can_assign_roles, can_manage_target, protected_user
 
 class ProfileForm(forms.ModelForm):
     class Meta:
@@ -29,15 +25,17 @@ class AccountEditForm(ProfileForm):
     def __init__(self, *args, actor, **kwargs):
         super().__init__(*args, **kwargs)
         self.actor = actor
-        self.initial["roles"] = list(self.instance.groups.filter(name__in=dict(ROLE_CHOICES)).values_list("name", flat=True))
+        self.initial["roles"] = list(canonical_roles(self.instance.groups.filter(name__in=ALL_ROLES).values_list("name", flat=True)))
         self.initial["is_active"] = self.instance.is_active
-        self.restricted = self.instance.pk == actor.pk or (protected_user(self.instance) and not actor.is_superuser)
-        if not actor.is_superuser:
+        self.restricted = self.instance.pk == actor.pk or not can_manage_target(actor, self.instance)
+        if not can_assign_roles(actor):
             self.fields["roles"].choices = [r for r in ROLE_CHOICES if r[0] not in PRIVILEGED or r[0] in self.initial["roles"]]
+        if not can_assign_roles(actor):
+            self.fields["roles"].disabled = True
         if self.restricted:
             self.fields["roles"].disabled = True
             self.fields["is_active"].disabled = True
-        if protected_user(self.instance) and self.instance.pk != actor.pk and not actor.is_superuser:
+        if not can_manage_target(actor, self.instance):
             for field in ("username", "first_name", "last_name"):
                 self.fields[field].disabled = True
 
@@ -50,8 +48,8 @@ class AccountEditForm(ProfileForm):
     def clean_roles(self):
         roles = set(self.cleaned_data["roles"])
         old = set(self.initial["roles"])
-        if not self.actor.is_superuser and (roles & PRIVILEGED) != (old & PRIVILEGED):
-            raise ValidationError("Không được thay đổi vai trò quản trị.")
+        if not can_assign_roles(self.actor) and roles != old:
+            raise ValidationError("Chỉ quản trị viên hệ thống được thay đổi vai trò.")
         if "reader" in roles and not hasattr(self.instance, "reader_profile"):
             raise ValidationError("Hãy tạo hồ sơ độc giả trước khi cấp vai trò Độc giả.")
         if hasattr(self.instance, "reader_profile") and "reader" not in roles:

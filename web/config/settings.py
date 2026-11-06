@@ -41,6 +41,7 @@ MIDDLEWARE = [
     "django.middleware.csrf.CsrfViewMiddleware",
     "django.contrib.auth.middleware.AuthenticationMiddleware",
     "django_otp.middleware.OTPMiddleware",
+    "apps.core.middleware.RequireEmailLoginMiddleware",
     "apps.core.middleware.RequirePasswordChangeMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
@@ -68,8 +69,8 @@ AUTHENTICATION_BACKENDS = [
 ]
 
 # Lock out only the username/IP pair to avoid blocking every user behind a shared campus IP.
-AXES_FAILURE_LIMIT = 5
-AXES_COOLOFF_TIME = timedelta(minutes=15)
+AXES_FAILURE_LIMIT = "apps.core.login_policy.configured_failure_limit"
+AXES_COOLOFF_TIME = "apps.core.login_policy.configured_cooloff"
 AXES_USE_ATTEMPT_EXPIRATION = True
 AXES_LOCKOUT_PARAMETERS = [["username", "ip_address"]]
 AXES_RESET_ON_SUCCESS = True

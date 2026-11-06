@@ -35,7 +35,7 @@ def reader_list(request):
 
 @staff_mfa_required
 def reader_add(request):
-    if not (request.user.has_perm("core.add_readerprofile") and request.user.has_perm("core.issue_account_invitation")):
+    if not (request.user.has_perm("core.add_readerprofile") and (request.user.has_perm("core.issue_account_invitation") or request.user.has_perm("core.invite_reader"))):
         return HttpResponseForbidden("Bạn không được cấp quyền tạo độc giả và gửi lời mời.")
     form = ReaderInvitationForm(request.POST if request.method == "POST" else None)
     if request.method == "POST" and form.is_valid():
@@ -63,7 +63,8 @@ def reader_edit(request, reader_id):
         fields = ("reader_number", "reader_type", "valid_from", "valid_until", "status")
         before = {name: str(getattr(profile, name)) for name in fields}
         form = ReaderProfileForm(request.POST if request.method == "POST" else None, instance=profile,
-                                 can_suspend=request.user.has_perm("core.suspend_reader"))
+                                 can_suspend=request.user.has_perm("core.suspend_reader"),
+                                 can_reactivate=request.user.has_perm("library.manage_reader_restrictions"))
         if request.method == "POST" and form.is_valid():
             try:
                 with transaction.atomic():

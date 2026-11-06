@@ -137,7 +137,7 @@ def checkout_copy(reader_number, barcode, actor, idempotency_key=None):
 def _checkout_copy(reader_number, barcode, actor, idempotency_key=None):
     _require_permission(actor, "checkout_loan")
     reader = ReaderProfile.objects.select_for_update().select_related("user").get(reader_number=reader_number)
-    copy = BookCopy.objects.select_for_update().select_related("book").get(barcode=barcode)
+    copy = BookCopy.objects.select_for_update().select_related("book").defer('book__cover_image').get(barcode=barcode)
     Book.objects.select_for_update().get(pk=copy.book_id)
     if idempotency_key:
         existing = Loan.objects.filter(idempotency_key=idempotency_key).first()
@@ -220,13 +220,13 @@ def _accrue_fine(loan, returned_at):
 @circulation_write
 def refresh_overdue_loans(reader=None):
     now = timezone.now()
-    loans = Loan.objects.filter(status=Loan.Status.OPEN, due_at__lt=now).select_related("reader__user", "copy__book")
+    loans = Loan.objects.filter(status=Loan.Status.OPEN, due_at__lt=now).select_related("reader__user", "copy__book").defer('copy__book__cover_image')
     if reader is not None:
         loans = loans.filter(reader=reader)
     refreshed = 0
     for loan_id in loans.values_list("id", flat=True).iterator():
         with transaction.atomic():
-            loan = Loan.objects.select_for_update().select_related("reader__user", "copy__book").get(pk=loan_id)
+            loan = Loan.objects.select_for_update().select_related("reader__user", "copy__book").defer('copy__book__cover_image').get(pk=loan_id)
             if loan.status != Loan.Status.OPEN or loan.due_at >= now:
                 continue
             _accrue_fine(loan, now)
@@ -398,7 +398,7 @@ def return_copy(barcode, actor, condition_note="", idempotency_key=None, conditi
 
 @circulation_write
 def renew_loan(loan_id, actor, idempotency_key=None):
-    loan = Loan.objects.select_for_update().select_related("reader__user", "copy__book", "policy").get(pk=loan_id)
+    loan = Loan.objects.select_for_update().select_related("reader__user", "copy__book", "policy").defer('copy__book__cover_image').get(pk=loan_id)
     now = timezone.now()
     if loan.reader.user_id != getattr(actor, "pk", None):
         _require_permission(actor, "renew_loan")
@@ -484,7 +484,7 @@ def cancel_reservation(reader, reservation_id, actor):
 
 @circulation_write
 def allocate_next_reservation(copy, actor):
-    copy = BookCopy.objects.select_for_update().select_related("book").get(pk=copy.pk)
+    copy = BookCopy.objects.select_for_update().select_related("book").defer('book__cover_image').get(pk=copy.pk)
     if not copy.is_active or not copy.book.is_active or not copy.allows_home_loan or copy.status != BookCopy.Status.AVAILABLE:
         return None
     now = timezone.now()

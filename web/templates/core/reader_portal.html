@@ -49,7 +49,7 @@
 </section>
 <section class="card">
   <h2>Khoản phạt</h2>
-  {% for fine in fines %}<p><a href="{% url 'reader_loan_detail' fine.loan_id %}">{{ fine.loan.copy.book.title }}</a> · phát sinh {{ fine.accrued_amount }} ₫ · còn phải trả {{ fine.balance }} ₫ · {{ fine.get_status_display }} · tính đến {{ fine.calculated_at|date:"d/m/Y H:i" }}</p>{% empty %}<p>Chưa ghi nhận khoản phạt.</p>{% endfor %}
+  {% for fine in fines %}<p><a href="{% url 'reader_loan_detail' fine.loan_id %}">{{ fine.loan.copy.book.title }}</a> · phát sinh {{ fine.accrued_amount }} ₫ · còn phải trả {{ fine.balance }} ₫ · {{ fine.get_status_display }} · tính đến {{ fine.calculated_at|date:"d/m/Y H:i" }}{% if fine.balance > 0 %} · <a href="{% url 'library:payment_start' fine.pk %}">Thanh toán thử qua ngân hàng / MoMo</a>{% endif %}</p>{% empty %}<p>Chưa ghi nhận khoản phạt.</p>{% endfor %}
   {% include "core/reader_pagination.html" with page=fines section="fine" %}
 </section>
 {% endif %}

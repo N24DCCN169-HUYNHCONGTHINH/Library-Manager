@@ -4,7 +4,8 @@
 <section class="card form-card">
   <h1>{% if book %}Sửa sách{% else %}Thêm sách{% endif %}</h1>
   <p>Tài liệu quý/hiếm, báo/tạp chí và luận văn chỉ được đọc tại chỗ. ISBN có thể để trống.</p>
-  <form method="post">{% csrf_token %}{{ form.as_p }}<button type="submit">Lưu sách</button></form>
+  <form method="post" enctype="multipart/form-data">{% csrf_token %}{{ form.as_p }}<button type="submit">Lưu sách</button></form>
+  {% if book %}<p><a href="{% url 'library:copies' book.pk %}">Quản lý bản sách & vị trí kệ</a>{% if perms.library.delete_book %} · <a href="{% url 'library:retire_book' book.pk %}">Ngừng sử dụng đầu sách</a>{% endif %}</p>{% endif %}
   <a href="{% url 'library:book_list' %}">Quay lại danh sách</a>
 </section>
 {% endblock %}

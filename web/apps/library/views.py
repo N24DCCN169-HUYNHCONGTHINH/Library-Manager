@@ -26,7 +26,7 @@ from .damage_pricing import quote_damage
 def staff_loan_detail(request, loan_id):
     if not request.user.has_perm("library.view_loan"):
         return HttpResponseForbidden("Bạn không được cấp quyền xem lượt mượn.")
-    loan = get_object_or_404(Loan.objects.select_related("reader__user", "copy__book", "copy__branch"), pk=loan_id)
+    loan = get_object_or_404(Loan.objects.select_related("reader__user", "copy__book", "copy__branch").defer('copy__book__cover_image'), pk=loan_id)
     fine = Fine.objects.filter(loan=loan).first() if request.user.has_perm("library.view_fine") else None
     events = list(loan.events.select_related("actor").order_by("occurred_at", "pk")) if request.user.has_perm("library.view_loanevent") else []
     event_labels = {"checkout": "Cho mượn", "return": "Nhận trả", "renewal": "Gia hạn", "renew": "Gia hạn",
@@ -58,7 +58,7 @@ def book_list(request):
     if not request.user.has_perm("library.view_book"):
         return HttpResponseForbidden("Bạn không được cấp quyền xem danh mục nội bộ.")
     query = request.GET.get("q", "").strip()
-    books = Book.objects.all().order_by("title", "pk")
+    books = Book.objects.defer("cover_image").order_by("title", "pk")
     if query:
         books = books.filter(Q(title__icontains=query) | Q(authors__icontains=query)
                              | Q(catalog_number__icontains=query) | Q(isbn__icontains=query))
@@ -76,13 +76,16 @@ def book_edit(request, book_id=None):
     if not request.user.has_perm(permission):
         return HttpResponseForbidden("Bạn không được cấp quyền thay đổi danh mục.")
     book = get_object_or_404(Book, pk=book_id) if book_id is not None else None
-    form = BookForm(request.POST if request.method == "POST" else None, instance=book)
+    form = BookForm(request.POST if request.method == "POST" else None, request.FILES or None, instance=book)
     if request.method == "POST" and form.is_valid():
         book = form.save(commit=False)
         if book_id is None:
             book.created_by = request.user
         book.updated_by = request.user
         book.save()
+        from apps.core.lifecycle import record_security_event
+        from apps.core.models import AccountSecurityEvent
+        record_security_event(request.user, AccountSecurityEvent.Kind.SYSTEM_OPERATION, request.user, {"book":book.pk,"fields":form.changed_data}, reason="Cập nhật danh mục sách")
         messages.success(request, "Đã lưu thông tin sách.")
         return redirect("library:book_list")
     return render(request, "library/book_form.html", {"form": form, "book": book})
@@ -92,7 +95,7 @@ def catalog(request):
     query = request.GET.get("q", "").strip()
     branch_id = request.GET.get("branch", "").strip()
     branches = LibraryBranch.objects.filter(is_active=True)
-    books = Book.objects.filter(is_active=True)
+    books = Book.objects.filter(is_active=True).defer("cover_image")
     if query:
         books = books.filter(
             Q(title__icontains=query) | Q(authors__icontains=query) | Q(isbn__icontains=query)
@@ -163,7 +166,7 @@ def circulation_desk(request):
             elif action == "expire":
                 count = expire_ready_reservations()
                 if request.headers.get("Accept") == "application/json":
-                    reservations = Reservation.objects.select_related("reader", "book", "copy", "notification").filter(status__in=["waiting", "ready"]).order_by("created_at", "pk")[:50]
+                    reservations = Reservation.objects.select_related("reader", "book", "copy", "notification").defer('book__cover_image').filter(status__in=["waiting", "ready"]).order_by("created_at", "pk")[:50]
                     html = render_to_string("library/partials/reservation_rows.html", {"reservations": reservations}, request=request)
                     return JsonResponse({"message": f"Đã kiểm tra: {count} yêu cầu hết hạn được xử lý.", "html": html})
                 messages.success(request, f"Đã xử lý {count} yêu cầu hết hạn giữ chỗ.")
@@ -191,13 +194,13 @@ def circulation_desk(request):
                 forms[action].add_error(None, str(exc) if isinstance(exc, CirculationError) else "Không tìm thấy độc giả, bản sách hoặc lượt giao dịch.")
             else:
                 messages.error(request, str(exc))
-    loans = list(Loan.objects.filter(status=Loan.Status.OPEN).select_related("reader", "copy__book").order_by("due_at")[:50])
+    loans = list(Loan.objects.filter(status=Loan.Status.OPEN).select_related("reader", "copy__book").defer('copy__book__cover_image').order_by("due_at")[:50])
     overdue_loans = [loan for loan in loans if loan.due_at < timezone.now()]
-    unpaid_fines = Fine.objects.filter(status=Fine.Status.DUE).select_related("loan__reader", "loan__copy__book").prefetch_related("transactions").order_by("calculated_at")[:50]
-    reservations = Reservation.objects.select_related("reader", "book", "copy", "notification").filter(status__in=[Reservation.Status.WAITING, Reservation.Status.READY]).order_by("created_at", "pk")[:50]
+    unpaid_fines = Fine.objects.filter(status=Fine.Status.DUE).select_related("loan__reader", "loan__copy__book").defer('loan__copy__book__cover_image').prefetch_related("transactions").order_by("calculated_at")[:50]
+    reservations = Reservation.objects.select_related("reader", "book", "copy", "notification").defer('book__cover_image').filter(status__in=[Reservation.Status.WAITING, Reservation.Status.READY]).order_by("created_at", "pk")[:50]
     return render(request, "library/circulation_desk.html", {"checkout_form": checkout_form, "return_form": return_form, "payment_form": payment_form, "renewal_form": renewal_form, "reopen_form": reopen_form, "loans": loans, "overdue_loans": overdue_loans, "active_tab": active_tab,
-        "damage_cases": DamageCase.objects.select_related("loan__copy__book", "loan__reader").order_by("-reported_at")[:50] if request.user.has_perm("library.view_damagecase") else [],
-        "loan_notices": LoanNotification.objects.select_related("loan__copy__book", "loan__reader").order_by("-created_at")[:50] if request.user.has_perm("library.view_loannotification") else [],
+        "damage_cases": DamageCase.objects.select_related("loan__copy__book", "loan__reader").defer('loan__copy__book__cover_image').order_by("-reported_at")[:50] if request.user.has_perm("library.view_damagecase") else [],
+        "loan_notices": LoanNotification.objects.select_related("loan__copy__book", "loan__reader").defer('loan__copy__book__cover_image').order_by("-created_at")[:50] if request.user.has_perm("library.view_loannotification") else [],
         "unpaid_fines": unpaid_fines, "reservations": reservations})
 
 

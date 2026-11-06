@@ -151,13 +151,14 @@ class ReaderManagementTests(TestCase):
             self.login(user)
             expected_list = 200 if role in {"circulation_staff", "librarian"} else (302 if role == "reader" else 403)
             self.assertEqual(self.client.get(reverse("reader_list")).status_code, expected_list)
-            expected_write = 302 if role == "reader" else 403
-            self.assertEqual(self.client.post(reverse("reader_add"), self.invitation()).status_code, expected_write)
+            expected_write = 302 if role in {"reader", "circulation_staff", "librarian"} else 403
+            payload=self.invitation(username="new-"+role,email=role+"@example.invalid",reader_number="NEW-"+role)
+            self.assertEqual(self.client.post(reverse("reader_add"), payload).status_code, expected_write)
             self.assertEqual(self.client.post(reverse("reader_edit", args=[self.profile.pk]), self.edit_data()).status_code, expected_write)
-        self.assertEqual(ReaderProfile.objects.count(), 1)
+        self.assertEqual(ReaderProfile.objects.count(), 3)
 
     def test_change_permission_does_not_grant_suspend_permission(self):
-        user = self.make_user("limited-editor", "librarian")
+        user = self.make_user("limited-editor", "cataloger")
         user.user_permissions.add(Permission.objects.get(codename="change_readerprofile"))
         self.login(user)
         self.client.post(reverse("reader_edit", args=[self.profile.pk]), self.edit_data(status="suspended"))

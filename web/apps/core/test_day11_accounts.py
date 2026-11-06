@@ -38,8 +38,12 @@ class Day11AccountJourneyTests(TestCase):
         self.login_reader()
 
     def login_reader(self):
+        from .models import EmailLoginChallenge
+        EmailLoginChallenge.objects.filter(user=self.user).update(created_at=timezone.now()-timedelta(minutes=2))
         response = self.client.post(reverse("login"), {"username": self.user.username, "password": self.password})
-        self.assertRedirects(response, reverse("reader_portal"))
+        self.assertRedirects(response, reverse("email_otp_verify"))
+        code=re.search(r"Mã OTP đăng nhập: (\d{6})",mail.outbox[-1].body).group(1)
+        self.assertRedirects(self.client.post(reverse("email_otp_verify"),{"code":code}),reverse("reader_portal"))
 
     def test_activation_email_change_and_account_disable_reactivate(self):
         self.activate()

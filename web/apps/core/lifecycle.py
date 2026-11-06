@@ -46,9 +46,12 @@ def _send_mail(subject, message, recipient, *, fail_silently=False):
 
 @transaction.atomic
 def issue_account_invitation(*, actor, request, username, email, first_name="", last_name="", role="reader", reader_number="", reader_type="", valid_from=None, valid_until=None):
-    if not actor.is_superuser and not actor.has_perm("core.issue_account_invitation"):
+    from .roles import can_assign_roles
+    if not actor.is_superuser and not (actor.has_perm("core.issue_account_invitation") or (role == "reader" and actor.has_perm("core.invite_reader"))):
         raise PermissionError("Tài khoản không được cấp quyền gửi lời mời.")
-    allowed_roles = {"reader", "cataloger", "circulation_staff", "librarian"}
+    allowed_roles = {"reader", "cataloger", "circulation_staff"}
+    if can_assign_roles(actor):
+        allowed_roles |= {"librarian", "system_admin"}
     if role not in allowed_roles:
         raise ValidationError("Vai trò này chỉ được cấp bởi quản trị khẩn cấp.")
     user_model = get_user_model()
@@ -176,7 +179,8 @@ def request_email_change(*, user, email, current_password, request):
 def issue_email_confirmation(*, user, email, request, actor):
     if actor.pk != user.pk and not actor.has_perm("core.manage_account_lifecycle"):
         raise PermissionError("Không có quyền quản lý email.")
-    if actor.pk != user.pk and (user.is_superuser or user.groups.filter(name__in=["library_manager", "system_admin"]).exists()) and not actor.is_superuser:
+    from .roles import can_manage_target
+    if not can_manage_target(actor, user):
         raise PermissionError("Chỉ quản trị viên hệ thống được đổi email của tài khoản quản trị khác.")
     if get_user_model().objects.filter(email__iexact=email).exclude(pk=user.pk).exists():
         raise ValidationError("Email này đã gắn với tài khoản khác.")
@@ -242,10 +246,18 @@ def confirm_email_change(raw_token, user):
 
 @transaction.atomic
 def revoke_totp_devices(*, subject, actor, reason="", channel="admin"):
+    subject = get_user_model().objects.select_for_update().get(pk=subject.pk)
+    from .roles import can_manage_target
+    if not can_manage_target(actor, subject):
+        raise PermissionError("Không được thu hồi xác thực của tài khoản này.")
     if not actor.is_superuser and not actor.has_perm("core.revoke_totp_device"):
         raise PermissionError("Tài khoản không được cấp quyền thu hồi thiết bị xác thực.")
+    from .models import EmailLoginDevice, EmailLoginChallenge
+    email_count = EmailLoginDevice.objects.filter(user=subject).count()
+    EmailLoginDevice.objects.filter(user=subject).delete()
+    EmailLoginChallenge.objects.filter(user=subject, consumed_at__isnull=True).update(consumed_at=timezone.now())
     devices = TOTPDevice.objects.select_for_update().filter(user=subject)
-    count = devices.count()
+    count = devices.count() + email_count
     devices.delete()
     expired = 0
     for session in Session.objects.filter(expire_date__gt=timezone.now()).iterator():
@@ -267,9 +279,14 @@ def revoke_totp_devices(*, subject, actor, reason="", channel="admin"):
 
 @transaction.atomic
 def set_account_active(*, subject, actor, is_active, reason=""):
+    from .roles import can_manage_target
+    if subject.pk == actor.pk or not can_manage_target(actor, subject):
+        raise PermissionError("Không được đổi trạng thái tài khoản này.")
     if not actor.is_superuser and not actor.has_perm("core.manage_account_lifecycle"):
         raise PermissionError("Tài khoản không được cấp quyền khóa hoặc mở tài khoản.")
     subject = get_user_model().objects.select_for_update().get(pk=subject.pk)
+    if not can_manage_target(actor, subject):
+        raise PermissionError("Không được đổi trạng thái tài khoản này.")
     if not is_active and subject.is_superuser and not actor.is_superuser:
         raise ValidationError("Chỉ một superuser khác mới được khóa tài khoản superuser.")
     security, _ = AccountSecurity.objects.get_or_create(user=subject)

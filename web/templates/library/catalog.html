@@ -16,7 +16,7 @@
   </form>
 </section><p class="muted">{{ page_obj.paginator.count }} đầu sách · Trang {{ page_obj.number }} / {{ page_obj.paginator.num_pages }}</p><div class="catalog-grid">
   {% for book in books %}
-    <article class="card book-card"><div class="book-cover" aria-hidden="true"><span>▤</span></div><div class="book-body"><div class="book-code">{{ book.catalog_number }}</div><span class="badge {% if book.available_copies_count %}bg-teal-lt{% else %}bg-orange-lt{% endif %}">{% if book.available_copies_count %}Có bản sẵn sàng{% else %}Chưa có bản sẵn sàng{% endif %}</span>
+    <article class="card book-card">{% if book.has_cover %}<img class="catalog-cover-image" src="{% url 'library:cover_image' book.pk %}?v={{ book.updated_at|date:'U' }}" alt="Bìa {{ book.title }}">{% else %}<div class="book-cover" aria-hidden="true"><span>▤</span></div>{% endif %}<div class="book-body"><div class="book-code">{{ book.catalog_number }}</div><span class="badge {% if book.available_copies_count %}bg-teal-lt{% else %}bg-orange-lt{% endif %}">{% if book.available_copies_count %}Có bản sẵn sàng{% else %}Chưa có bản sẵn sàng{% endif %}</span>
       <h2>{{ book.title }}</h2>
       <p>{{ book.authors|default:"Chưa có thông tin tác giả" }}{% if book.publication_year %} · {{ book.publication_year }}{% endif %} · {{ book.get_material_type_display }}</p>
       <p>Mã: {{ book.catalog_number }}{% if book.isbn %} · ISBN {{ book.isbn }}{% endif %} · Bản sẵn sàng tại cơ sở đã chọn: {{ book.available_copies_count }}</p>

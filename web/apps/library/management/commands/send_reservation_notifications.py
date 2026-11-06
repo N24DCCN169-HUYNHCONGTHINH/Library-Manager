@@ -10,6 +10,10 @@ class Command(BaseCommand):
     help = "Send pending ready-for-pickup email notices; failed notices remain available for retry."
 
     def handle(self, *args, **options):
+        from apps.core.models import SystemConfiguration
+        if SystemConfiguration.objects.filter(pk=1, notifications_enabled=False).exists():
+            self.stdout.write("Thông báo nghiệp vụ đang tắt.")
+            return
         sent = failed = 0
         ids = ReservationNotification.objects.filter(sent_at__isnull=True,
             reservation__status=Reservation.Status.READY,
@@ -17,7 +21,7 @@ class Command(BaseCommand):
         for notice_id in list(ids):
             with transaction.atomic():
                 notice = ReservationNotification.objects.select_for_update().get(pk=notice_id)
-                reservation = Reservation.objects.select_related("reader__user", "book").get(pk=notice.reservation_id)
+                reservation = Reservation.objects.select_related("reader__user", "book").defer('book__cover_image').get(pk=notice.reservation_id)
                 if notice.sent_at or reservation.status != Reservation.Status.READY or reservation.expires_at <= timezone.now():
                     continue
                 notice.attempts += 1
