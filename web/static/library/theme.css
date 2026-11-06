@@ -427,3 +427,5 @@ main { padding:32px 24px 32px 0; }
 @media(prefers-reduced-motion:reduce){.managed-book-card{transition:none}.managed-book-card:hover{transform:none}}
 
 .book-toolbar>form[method=get]{padding:0;margin:0;background:transparent;border:0;display:block}.book-toolbar-bottom p{margin:0}.book-toolbar-bottom{margin:8px 0}.managed-book-art{overflow:hidden}
+
+.entity-picker>.picker-status{padding:0;border:0;border-radius:0;background:transparent;box-shadow:none;font-weight:400;line-height:1.5}
