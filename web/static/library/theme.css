@@ -415,3 +415,8 @@ main { padding:32px 24px 32px 0; }
 .due-panel>p {margin-bottom:8px;}
 .due-calendar {margin:14px 0;}
 .queue-panel {margin-bottom:0;}
+.copy-details {margin:16px 0;color:#48695d;font-size:12px;}
+.copy-details summary {cursor:pointer;font-weight:600;padding:9px 0;}
+.copy-row {border-top:1px solid #e6ece8;padding:14px 0;}
+.copy-row p {margin:7px 0;font-size:12px;}
+.copy-row code {user-select:all;font-size:13px;}

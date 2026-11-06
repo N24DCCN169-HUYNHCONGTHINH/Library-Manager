@@ -14,18 +14,20 @@
     </select></div>
     <button type="submit">Tìm</button>
   </form>
-</section><div class="catalog-grid">
+</section><p class="muted">{{ page_obj.paginator.count }} đầu sách · Trang {{ page_obj.number }} / {{ page_obj.paginator.num_pages }}</p><div class="catalog-grid">
   {% for book in books %}
     <article class="card book-card"><div class="book-cover" aria-hidden="true"><span>▤</span></div><div class="book-body"><div class="book-code">{{ book.catalog_number }}</div><span class="badge {% if book.available_copies_count %}bg-teal-lt{% else %}bg-orange-lt{% endif %}">{% if book.available_copies_count %}Có bản sẵn sàng{% else %}Chưa có bản sẵn sàng{% endif %}</span>
       <h2>{{ book.title }}</h2>
       <p>{{ book.authors|default:"Chưa có thông tin tác giả" }}{% if book.publication_year %} · {{ book.publication_year }}{% endif %} · {{ book.get_material_type_display }}</p>
       <p>Mã: {{ book.catalog_number }}{% if book.isbn %} · ISBN {{ book.isbn }}{% endif %} · Bản sẵn sàng tại cơ sở đã chọn: {{ book.available_copies_count }}</p>
-      {% for copy in book.catalog_copies %}
-        {% if copy.status == "available" %}<p>Bản sẵn sàng · {{ copy.branch.name|default:"Chưa gán cơ sở" }}{% if copy.shelf_location %} · Kệ {{ copy.shelf_location }}{% endif %}</p>{% endif %}
-      {% endfor %}
+      <details class="copy-details"><summary>Xem vị trí và bản sách ({{ book.catalog_copies|length }})</summary>
+      {% for copy in book.catalog_copies %}<div class="copy-row"><span class="badge {% if copy.status == 'available' %}bg-teal-lt{% else %}bg-secondary-lt{% endif %}">{{ copy.get_status_display }}</span><p>{{ copy.branch.name|default:"Chưa gán cơ sở" }}{% if copy.shelf_location %} · Kệ {{ copy.shelf_location }}{% endif %}</p>
+      {% if perms.library.view_bookcopy %}<p>Mã bản sách: <code>{{ copy.barcode }}</code></p>{% if library_roles.can_circulate and copy.status == 'available' %}<a class="btn btn-sm btn-outline-primary" href="{% url 'library:circulation_desk' %}?barcode={{ copy.barcode|urlencode }}">Mượn bản này tại quầy →</a>{% endif %}{% endif %}</div>
+      {% empty %}<p>Chưa có bản sách tại cơ sở đã chọn.</p>{% endfor %}</details>
       {% if is_reader and selected_branch and book.available_copies_count == 0 and book.has_available_copies_anywhere %}<p>Có bản sẵn sàng tại cơ sở khác; hãy chọn “Tất cả cơ sở” để xem vị trí.</p>{% endif %}
       {% if is_reader and not book.has_available_loanable_copies and book.has_loanable_copies %}<form method="post" action="{% url 'library:reserve' book.id %}">{% csrf_token %}<button type="submit">Đặt trước</button></form>{% endif %}
     </div></article>
   {% empty %}<p class="empty-state">Không tìm thấy đầu sách phù hợp.</p>{% endfor %}
 </div>
+<nav class="pagination-line" aria-label="Phân trang danh mục">{% if page_obj.has_previous %}<a class="btn btn-outline-primary" href="?q={{ query|urlencode }}&amp;branch={{ selected_branch|urlencode }}&amp;page={{ page_obj.previous_page_number }}">← Trang trước</a>{% endif %}<span>Trang {{ page_obj.number }} / {{ page_obj.paginator.num_pages }}</span>{% if page_obj.has_next %}<a class="btn btn-outline-primary" href="?q={{ query|urlencode }}&amp;branch={{ selected_branch|urlencode }}&amp;page={{ page_obj.next_page_number }}">Trang sau →</a>{% endif %}</nav>
 {% endblock %}

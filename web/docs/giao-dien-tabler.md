@@ -35,3 +35,9 @@ Không thay đổi quy tắc nghiệp vụ, dữ liệu, thông tin đăng nhậ
 Bộ lọc ngày/tuần/tháng/năm kèm ngày tham chiếu. Lượt mượn và hồ sơ mới tính trong kỳ; số đầu sách, quá hạn, kho sẵn sàng và hàng chờ tính tại thời điểm xem. Kỳ trước là khoảng liên tiếp có cùng số ngày. Biểu đồ nhóm theo ngày địa phương (theo tháng khi chọn năm), có bảng số liệu chữ. Lịch hạn trả chỉ đếm lượt đang mở trong 7 ngày từ ngày tham chiếu; bảng giao dịch gồm 8 lượt mới nhất toàn hệ thống. Từng khối được kiểm tra quyền phía máy chủ. Dashboard không được lưu cache.
 
 Kiểm tra mới: 3 test về ranh giới ngày, khớp tổng biểu đồ, render trang, phân quyền dữ liệu và bộ lọc/năm nhuận đều đạt trên SQLite.
+
+## Luồng danh mục đến quầy
+
+Danh mục phân trang 12 đầu sách, giữ bộ lọc tìm kiếm/cơ sở khi chuyển trang. Mục vị trí và bản sách mở bằng details; người có quyền xem bản sách thấy mã vạch, nhân viên lưu thông có lối tắt mượn bản sẵn sàng. Lối tắt chỉ điền sẵn mã bản sách trên trang GET, không tạo giao dịch. Nhân viên phải nhập mã bạn đọc và xác nhận POST; hệ thống kiểm tra lại điều kiện tại thời điểm mượn.
+
+Email khôi phục chỉ có hiệu lực sau khi chủ tài khoản xác nhận liên kết bằng POST; có thể gửi xác minh lại email hiện tại nếu chưa xác minh. Thư thật chưa được kiểm tra chỉ bằng test mô phỏng.

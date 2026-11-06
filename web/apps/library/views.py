@@ -81,8 +81,9 @@ def catalog(request):
         Prefetch("copies", queryset=copies, to_attr="catalog_copies")
     ).distinct()
     is_reader = request.user.is_authenticated and request.user.groups.filter(name="reader").exists()
+    page = Paginator(books.order_by("title", "pk"), 12).get_page(request.GET.get("page"))
     return render(request, "library/catalog.html", {
-        "books": books, "query": query, "is_reader": is_reader, "branches": branches, "selected_branch": branch_id,
+        "books": page, "page_obj": page, "query": query, "is_reader": is_reader, "branches": branches, "selected_branch": branch_id,
     })
 
 
@@ -90,7 +91,8 @@ def catalog(request):
 def circulation_desk(request):
     if not (request.user.is_superuser or (request.user.has_perm("library.view_loan") and request.user.has_perm("library.view_fine"))):
         return HttpResponseForbidden("Bạn không được cấp quyền xem quầy lưu thông.")
-    checkout_form = CheckoutForm(request.POST if request.method == "POST" and request.POST.get("action") == "checkout" else None, auto_id="checkout_%s")
+    checkout_initial = {"barcode": request.GET.get("barcode", "")[:64]} if request.method == "GET" else {}
+    checkout_form = CheckoutForm(request.POST if request.method == "POST" and request.POST.get("action") == "checkout" else None, initial=checkout_initial, auto_id="checkout_%s")
     return_form = ReturnForm(request.POST if request.method == "POST" and request.POST.get("action") == "return" else None, auto_id="return_%s")
     payment_form = FinePaymentForm(request.POST if request.method == "POST" and request.POST.get("action") == "payment" else None, auto_id="payment_%s")
     renewal_form = RenewalForm(request.POST if request.method == "POST" and request.POST.get("action") == "renew" else None, auto_id="renewal_%s")
