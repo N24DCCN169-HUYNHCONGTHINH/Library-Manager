@@ -5,7 +5,7 @@ from django.test import RequestFactory, TestCase
 from django.urls import reverse
 
 from .lookup import lookup
-from .models import Book, Loan, FinePayment
+from .models import Book, Fine, Loan, FinePayment
 from .test_circulation import CirculationFixtures
 from .services import checkout_copy
 from .views import book_list, staff_loan_detail
@@ -74,3 +74,13 @@ class QuickInteractionTests(CirculationFixtures, TestCase):
         self.copy.save()
         response = lookup(self.request("/", {"q": "Sách", "branch": branch.pk}))
         self.assertIn(f"branch={branch.pk}", json.loads(response.content)["results"][0]["url"])
+
+    def test_fine_suggestions_calculate_balance_in_one_query_for_results(self):
+        loan = checkout_copy("a", "COPY-1", self.staff)
+        fine = Fine.objects.create(loan=loan, accrued_amount=10000, rate_per_day=1000, cap_amount=30000)
+        FinePayment.objects.create(fine=fine, kind="payment", amount=2000, receipt_number="PT-LOOKUP", created_by=self.staff)
+        self.staff.has_perm("library.view_fine")
+        request = self.request("/", {"kind": "fines", "q": str(fine.pk)}, self.staff)
+        with self.assertNumQueries(2):
+            response = lookup(request)
+        self.assertIn("8,000", json.loads(response.content)["results"][0]["detail"])

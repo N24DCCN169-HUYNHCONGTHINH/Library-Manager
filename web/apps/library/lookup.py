@@ -1,4 +1,5 @@
-from django.db.models import Q
+from decimal import Decimal
+from django.db.models import Case, DecimalField, F, Q, Sum, When
 from django.http import JsonResponse
 from django.urls import reverse
 from django.views.decorators.cache import never_cache
@@ -66,7 +67,11 @@ def lookup(request):
             match = Q(loan__copy__barcode__icontains=query) | Q(loan__copy__book__title__icontains=query) | Q(loan__reader__reader_number__icontains=query)
             if query.isascii() and query.isdigit() and len(query) < 10:
                 match |= Q(pk=int(query))
-            rows = Fine.objects.select_related("loan__copy__book", "loan__reader").filter(match).order_by("-calculated_at")[:8]
+            rows = Fine.objects.select_related("loan__copy__book", "loan__reader").filter(match).annotate(
+                net_transactions=Sum(Case(When(transactions__kind__in=["payment", "waiver"], then=-F("transactions__amount")),
+                    default=F("transactions__amount"), output_field=DecimalField(max_digits=14, decimal_places=0)), default=Decimal(0))
+            ).order_by("-calculated_at")[:8]
             for row in rows:
-                results.append({"label": row.loan.copy.book.title, "detail": f"Khoản #{row.pk} · {row.loan.reader.reader_number} · còn {row.balance:,.0f} ₫", "value": str(row.pk), "url": reverse("library:staff_loan_detail", args=[row.loan_id])})
+                balance = max(Decimal(0), row.accrued_amount + row.net_transactions)
+                results.append({"label": row.loan.copy.book.title, "detail": f"Khoản #{row.pk} · {row.loan.reader.reader_number} · còn {balance:,.0f} ₫", "value": str(row.pk), "url": reverse("library:staff_loan_detail", args=[row.loan_id])})
     return JsonResponse({"results": results})
