@@ -9,6 +9,10 @@
 - Reduced-motion disables transforms/transitions. Reduced-transparency and browsers without backdrop-filter get solid surfaces. Printing removes the wallpaper and uses dark text on white. Hover motion is disabled on touch-only devices.
 - For checking: home, catalogue, dashboard, circulation menus, reports/form tables, account/appearance forms, login and register, in light/dark, plus mobile layout. Preview data must not be presented as actual library statistics.
 
-## Route camera movement
+## Pinned navigation and opt-in movement
 
-`scene.js` runs before body paint. A fixed, decorative image layer extends 12% past every viewport edge (124% size), and translates by at most 5% of that layer between route-specific viewpoints. Each transition takes 1.8s, then stops; scrolling and pointer movement do not animate the background. Navigation inside circulation tabs also updates the viewpoint. Only two numeric coordinates are stored in sessionStorage; no URLs, queries, credentials or account data are stored. Reduced-motion disables image movement, print hides the layer, and without JavaScript the same enlarged photograph remains static.
+The topbar and left rail are fixed and have separate View Transition names. Header height is measured so content begins below it. Only same-origin navigation links inside these two bars opt into scene/content motion: vertical rail uses the Y axis, topbar uses X. Main content is the only sliding content snapshot; the bars remain stationary.
+
+The decorative layer remains enlarged by 12% on each edge. Plain reloads, filter/search/pagination links, form submissions, browser Back and tabs inside the content do not move the image. In-place circulation changes use the same opt-in rule. Local sessionStorage keeps coordinates plus a short-lived numeric direction/axis timestamp; it stores no URLs or account data. Reduced-motion disables animation, printing hides navigation and the photo. Browsers without cross-document View Transitions use ordinary navigation.
+
+All rail icon states explicitly define foreground/background contrast, including custom coloured icons, active circulation and bottom settings/logout controls.

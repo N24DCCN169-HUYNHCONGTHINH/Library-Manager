@@ -19,10 +19,14 @@
     activate(legacy[location.hash.slice(1)] || desk.dataset.activeTab);
     document.querySelectorAll('[data-desk-tab]').forEach(link => link.addEventListener('click',event => {
       if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
-      event.preventDefault(); activate(link.dataset.deskTab,true);
-      const fromMenu = link.closest('[data-circulation-menu]');
-      document.querySelectorAll('[data-circulation-menu]').forEach(menu => {menu.open=false;});
-      if(fromMenu) panels.find(panel=>!panel.hidden)?.querySelector('input:not([type=hidden]),a,button')?.focus({preventScroll:true});
+      event.preventDefault();
+      const change = () => {
+        activate(link.dataset.deskTab,true);
+        const fromMenu = link.closest('[data-circulation-menu]');
+        document.querySelectorAll('[data-circulation-menu]').forEach(menu => {menu.open=false;});
+        if(fromMenu) panels.find(panel=>!panel.hidden)?.querySelector('input:not([type=hidden]),a,button')?.focus({preventScroll:true});
+      };
+      if(window.LibraryNavigation) window.LibraryNavigation.run(change); else change();
     }));
     window.addEventListener('popstate',()=>activate(legacy[location.hash.slice(1)] || new URLSearchParams(location.search).get('tab') || 'checkout'));
     desk.querySelectorAll('.desk-action-form').forEach(form => {

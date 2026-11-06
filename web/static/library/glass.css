@@ -160,3 +160,52 @@ html[data-scene-run=b] .library-backdrop:before{animation-name:library-scene-b}
 ::view-transition-old(library-backdrop),::view-transition-new(library-backdrop){animation-duration:.7s}
 @media(prefers-reduced-motion:reduce){.library-backdrop:before{animation:none!important;transform:none!important}::view-transition-old(library-backdrop),::view-transition-new(library-backdrop){animation:none!important}}
 @media print{.library-backdrop{display:none!important}}
+
+/* Persistent chrome is kept out of the page-content transition. */
+:root{--glass-ink:#102e27;--glass-muted:#203e34;--nav-direction:1;--chrome-offset:86px}
+html[data-bs-theme=dark]{--glass-ink:#f2fff8;--glass-muted:#d2e8dc}
+html[data-bs-theme] body{font-weight:500}
+html[data-bs-theme] body .app-sidebar{position:fixed;inset:0 auto 0 0;height:100dvh;width:88px;z-index:90;view-transition-name:library-rail}
+html[data-bs-theme] body .app-main{margin-left:88px;padding-top:var(--chrome-offset);min-width:0}
+html[data-bs-theme] body .topbar{position:fixed;top:18px;left:88px;right:24px;margin:0;z-index:80;view-transition-name:library-topbar}
+html[data-bs-theme] body.account-shell .app-main{margin-left:0}
+html[data-bs-theme] body.account-shell .topbar{left:24px;margin:0}
+html[data-bs-theme] body :is(.card p,.muted,.text-secondary,.helptext,.table,.list-table,.book-card p,.metric-card>span,.metric-card small){font-weight:500}
+html[data-bs-theme] body :is(.top-nav a,.desk-tabs a,.staff-feature-nav a,label,th){font-weight:650}
+#main-content{view-transition-name:library-content}
+::view-transition-group(library-rail),::view-transition-group(library-topbar){animation-duration:0s}
+::view-transition-old(library-rail),::view-transition-old(library-topbar){animation:none;opacity:0}
+::view-transition-new(library-rail),::view-transition-new(library-topbar){animation:none;opacity:1}
+::view-transition-old(root),::view-transition-new(root){animation:none}
+::view-transition-old(library-content),::view-transition-new(library-content){animation:none}
+html[data-nav-axis=y]::view-transition-old(library-content){animation:library-content-out-y .38s ease both}
+html[data-nav-axis=y]::view-transition-new(library-content){animation:library-content-in-y .46s cubic-bezier(.2,.65,.25,1) both}
+html[data-nav-axis=x]::view-transition-old(library-content){animation:library-content-out-x .38s ease both}
+html[data-nav-axis=x]::view-transition-new(library-content){animation:library-content-in-x .46s cubic-bezier(.2,.65,.25,1) both}
+@keyframes library-content-out-y{to{opacity:0;transform:translateY(calc(-32px * var(--nav-direction)))}}
+@keyframes library-content-in-y{from{opacity:0;transform:translateY(calc(48px * var(--nav-direction)))}to{opacity:1;transform:none}}
+@keyframes library-content-out-x{to{opacity:0;transform:translateX(calc(-40px * var(--nav-direction)))}}
+@keyframes library-content-in-x{from{opacity:0;transform:translateX(calc(64px * var(--nav-direction)))}to{opacity:1;transform:none}}
+@media(max-width:760px){
+ html[data-bs-theme] body .app-sidebar{width:68px}
+ html[data-bs-theme] body .app-main{margin-left:68px}
+ html[data-bs-theme] body .topbar{left:68px;right:12px;top:14px;margin:0}
+ html[data-bs-theme] body.account-shell .topbar{left:12px}
+ html[data-bs-theme] body.account-shell .app-main{margin-left:0}
+}
+@media(max-height:700px){html[data-bs-theme] body .app-sidebar{padding-top:14px;padding-bottom:14px}html[data-bs-theme] body .rail-brand{margin-bottom:20px}html[data-bs-theme] body .rail-group{gap:4px;margin-bottom:12px}}
+@media(prefers-reduced-motion:reduce){::view-transition-old(library-content),::view-transition-new(library-content){animation:none!important}}
+@media print{html[data-bs-theme] body .app-main{margin:0;padding:0}html[data-bs-theme] body .topbar,html[data-bs-theme] body .app-sidebar{display:none!important}}
+
+/* Explicit icon states avoid pale icons on pale custom-colour buttons. */
+html[data-bs-theme] body .app-sidebar :is(a.rail-link,button.rail-link,summary.rail-link){background:transparent!important;color:var(--glass-ink)!important;opacity:1}
+html[data-bs-theme] body[data-icon-style=colored] .app-sidebar :is(a.rail-link,button.rail-link,summary.rail-link){color:#087052!important;background:rgba(125,196,165,.18)!important}
+html[data-bs-theme=dark] body[data-icon-style=colored] .app-sidebar :is(a.rail-link,button.rail-link,summary.rail-link){color:#a2f1d5!important;background:rgba(61,136,105,.20)!important}
+html[data-bs-theme] body .app-sidebar :is(a.rail-link,button.rail-link,summary.rail-link):hover{background:rgba(28,116,83,.24)!important;color:var(--glass-ink)!important}
+html[data-bs-theme] body .app-sidebar a.rail-link[aria-current],html[data-bs-theme] body .app-sidebar .rail-circulation:is(.is-current,[open])>summary.rail-link{background:#176d51!important;color:#fff!important;box-shadow:0 3px 12px #104c3c40}
+html[data-bs-theme] body .app-sidebar .rail-link :is(svg,.ui-icon){color:inherit!important;opacity:1;visibility:visible}
+html{scroll-padding-top:calc(var(--chrome-offset) + 16px)}
+#main-content{scroll-margin-top:calc(var(--chrome-offset) + 16px)}
+@media(max-height:580px){html[data-bs-theme] body .app-sidebar .rail-link{height:34px;min-height:34px;width:38px}html[data-bs-theme] body .rail-group{margin-bottom:8px;padding-top:5px;padding-bottom:5px}html[data-bs-theme] body .rail-brand{margin-bottom:12px}}
+
+.top-nav{scrollbar-width:none}.top-nav::-webkit-scrollbar{display:none}
