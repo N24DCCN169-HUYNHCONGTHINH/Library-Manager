@@ -1,0 +1,11 @@
+{% extends "base.html" %}
+{% block title %}Lượt mượn #{{ loan.pk }} · Library Hub{% endblock %}
+{% block content %}
+<div class="page-intro"><div><div class="eyebrow">CHI TIẾT GIAO DỊCH</div><h1>Lượt mượn #{{ loan.pk }}</h1><p>{{ loan.get_status_display }}</p></div><a href="{% url 'library:circulation_desk' %}">Về quầy mượn/trả</a></div>
+<section class="card"><h2>{{ loan.copy.book.title }}</h2><p>Mã bản: <code>{{ loan.copy.barcode }}</code> · {{ loan.copy.branch.name|default:"Chưa gán cơ sở" }}</p><p><a href="{% url 'library:catalog' %}?q={{ loan.copy.book.catalog_number|urlencode }}">Xem sách và vị trí</a>{% if perms.library.change_book %} · <a href="{% url 'library:book_edit' loan.copy.book_id %}">Sửa đầu sách</a>{% endif %}</p>
+{% if perms.core.view_readerprofile %}<p>Độc giả: <a href="{% url 'reader_list' %}?q={{ loan.reader.reader_number|urlencode }}">{{ loan.reader.reader_number }} · {{ loan.reader.user.get_full_name|default:loan.reader.user.username }}</a></p>{% endif %}
+<p>Ngày mượn: {{ loan.loaned_at|date:"d/m/Y H:i" }} · Hạn trả: {{ loan.due_at|date:"d/m/Y H:i" }}</p>{% if loan.returned_at %}<p>Đã trả: {{ loan.returned_at|date:"d/m/Y H:i" }}</p>{% endif %}
+{% if library_roles.can_circulate %}<a class="btn btn-outline-primary" href="{% url 'library:circulation_desk' %}?barcode={{ loan.copy.barcode|urlencode }}&amp;loan={{ loan.pk }}{% if fine %}&amp;fine={{ fine.pk }}{% endif %}">Mở giao dịch tại quầy</a>{% endif %}</section>
+{% if fine %}<section class="card"><h2>Khoản phạt #{{ fine.pk }}</h2><p>Đã tính: {{ fine.accrued_amount }} ₫ · Còn phải trả: {{ fine.balance }} ₫</p>{% for payment in payments %}<p>{{ payment.receipt_number }} · {{ payment.get_kind_display }} · {{ payment.amount }} ₫ · {{ payment.created_at|date:"d/m/Y H:i" }}</p>{% endfor %}</section>{% endif %}
+<section class="card"><h2>Lịch sử xử lý</h2>{% for event in events %}<p>{{ event.occurred_at|date:"d/m/Y H:i" }} · {{ event.display_label }} · {{ event.actor|default:"Hệ thống" }}{% if event.reason %} · {{ event.reason }}{% endif %}</p>{% empty %}<p>Chưa có lịch sử hiển thị.</p>{% endfor %}</section>
+{% endblock %}

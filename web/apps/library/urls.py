@@ -1,9 +1,12 @@
 from django.urls import path
 
 from . import views
+from .lookup import lookup
 
 app_name = "library"
 urlpatterns = [
+    path("lookup/", lookup, name="lookup"),
+    path("staff/loans/<int:loan_id>/", views.staff_loan_detail, name="staff_loan_detail"),
     path("staff/damage/quote/", views.damage_quote, name="damage_quote"),
     path("staff/books/", views.book_list, name="book_list"),
     path("staff/books/add/", views.book_edit, name="book_add"),

@@ -6,7 +6,7 @@
   {% for message in messages %}<p role="status">{{ message }}</p>{% endfor %}
   <form method="get">
     <div><label for="q">Nhan đề, tác giả, ISBN, mã xếp giá hoặc mã bản sách</label>
-    <input id="q" name="q" value="{{ query }}"></div>
+    <input id="q" data-lookup="books" data-lookup-mode="navigate" name="q" value="{{ query }}"></div>
     <div><label for="branch">Cơ sở</label>
     <select id="branch" name="branch">
       <option value="">Tất cả cơ sở</option>

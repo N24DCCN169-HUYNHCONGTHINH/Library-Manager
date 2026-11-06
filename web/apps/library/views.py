@@ -21,6 +21,23 @@ from .damage_pricing import quote_damage
 
 @never_cache
 @staff_mfa_required
+def staff_loan_detail(request, loan_id):
+    if not request.user.has_perm("library.view_loan"):
+        return HttpResponseForbidden("Bạn không được cấp quyền xem lượt mượn.")
+    loan = get_object_or_404(Loan.objects.select_related("reader__user", "copy__book", "copy__branch"), pk=loan_id)
+    fine = Fine.objects.filter(loan=loan).first() if request.user.has_perm("library.view_fine") else None
+    events = list(loan.events.select_related("actor").order_by("occurred_at", "pk")) if request.user.has_perm("library.view_loanevent") else []
+    event_labels = {"checkout": "Cho mượn", "return": "Nhận trả", "renewal": "Gia hạn", "renew": "Gia hạn",
+        "long_overdue_review": "Chạm trần phạt — cần xem xét", "damage_approved": "Duyệt hồ sơ hư hỏng"}
+    for event in events:
+        event.display_label = event_labels.get(event.event_type, "Cập nhật giao dịch")
+    return render(request, "library/staff_loan_detail.html", {"loan": loan, "fine": fine,
+        "events": events,
+        "payments": fine.transactions.all() if fine and request.user.has_perm("library.view_finepayment") else []})
+
+
+@never_cache
+@staff_mfa_required
 def damage_quote(request):
     if not request.user.has_perm("library.approve_damagecase"):
         return HttpResponseForbidden("Chỉ quản lý được lập mức bồi thường có căn cứ.")
@@ -43,8 +60,11 @@ def book_list(request):
     if query:
         books = books.filter(Q(title__icontains=query) | Q(authors__icontains=query)
                              | Q(catalog_number__icontains=query) | Q(isbn__icontains=query))
+    books = books.annotate(copy_count=Count("copies", filter=Q(copies__is_active=True), distinct=True),
+        ready_count=Count("copies", filter=Q(copies__is_active=True, copies__status=BookCopy.Status.AVAILABLE, is_active=True), distinct=True))
+    page = Paginator(books, 24).get_page(request.GET.get("page"))
     return render(request, "library/book_list.html", {
-        "page_obj": Paginator(books, 25).get_page(request.GET.get("page")), "query": query,
+        "page_obj": page, "query": query,
     })
 
 
@@ -114,6 +134,12 @@ def circulation_desk(request):
     return_form = ReturnForm(request.POST if request.method == "POST" and request.POST.get("action") == "return" else None, auto_id="return_%s")
     payment_form = FinePaymentForm(request.POST if request.method == "POST" and request.POST.get("action") == "payment" else None, auto_id="payment_%s")
     renewal_form = RenewalForm(request.POST if request.method == "POST" and request.POST.get("action") == "renew" else None, auto_id="renewal_%s")
+    if request.method == "GET":
+        return_form.initial["barcode"] = request.GET.get("barcode", "")[:64]
+        for form, key, parameter in ((renewal_form, "loan_id", "loan"), (payment_form, "fine_id", "fine")):
+            value = request.GET.get(parameter, "")
+            if value.isascii() and value.isdigit() and len(value) < 10:
+                form.initial[key] = value
     reopen_form = ReopenReaderForm(request.POST if request.method == "POST" and request.POST.get("action") == "reopen" else None)
     if request.method == "POST":
         try:

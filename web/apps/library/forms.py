@@ -52,31 +52,31 @@ class BookForm(forms.ModelForm):
 
 class CheckoutForm(forms.Form):
     idempotency_key = forms.UUIDField(initial=uuid4, widget=forms.HiddenInput)
-    reader_number = forms.CharField(label="Mã bạn đọc", max_length=32)
-    barcode = forms.CharField(label="Mã vạch bản sách", max_length=64)
+    reader_number = forms.CharField(label="Mã bạn đọc", max_length=32, widget=forms.TextInput(attrs={"data-lookup": "readers", "placeholder": "Gõ tên hoặc mã bạn đọc…"}))
+    barcode = forms.CharField(label="Mã vạch bản sách", max_length=64, widget=forms.TextInput(attrs={"data-lookup": "copies", "placeholder": "Quét mã hoặc gõ tên sách…"}))
 
 
 class ReturnForm(forms.Form):
     idempotency_key = forms.UUIDField(initial=uuid4, widget=forms.HiddenInput)
-    barcode = forms.CharField(label="Mã vạch bản sách", max_length=64)
+    barcode = forms.CharField(label="Mã vạch bản sách", max_length=64, widget=forms.TextInput(attrs={"data-lookup": "copies", "placeholder": "Quét mã hoặc gõ tên sách…"}))
     condition_kind = forms.ChoiceField(label="Tình trạng khi nhận", required=False, choices=[("", "Bình thường / phân loại theo ghi chú"), ("normal_wear", "Hao mòn tự nhiên — không thu phí"), ("minor_damage", "Hư hỏng nhẹ — cần kiểm tra"), ("major_damage", "Hư hỏng nặng — cần kiểm tra")])
     condition_note = forms.CharField(label="Ghi nhận tình trạng bất thường (nếu có)", required=False, max_length=500, widget=forms.Textarea(attrs={"rows": 2}))
 
 
 class RenewalForm(forms.Form):
     idempotency_key = forms.UUIDField(initial=uuid4, widget=forms.HiddenInput)
-    loan_id = forms.IntegerField(label="Mã lượt mượn", min_value=1)
+    loan_id = forms.IntegerField(label="Mã lượt mượn", min_value=1, widget=forms.TextInput(attrs={"data-lookup": "loans", "placeholder": "Tìm bằng tên sách, mã bản hoặc mã bạn đọc…"}))
 
 
 class FinePaymentForm(forms.Form):
     idempotency_key = forms.UUIDField(initial=uuid4, widget=forms.HiddenInput)
-    fine_id = forms.IntegerField(label="Mã khoản phạt", min_value=1)
+    fine_id = forms.IntegerField(label="Mã khoản phạt", min_value=1, widget=forms.TextInput(attrs={"data-lookup": "fines", "placeholder": "Tìm sách, mã bạn đọc hoặc khoản phạt…"}))
     amount = forms.DecimalField(label="Số tiền nhận (VND)", min_value=1, decimal_places=0, max_digits=10)
     reason = forms.CharField(label="Ghi chú biên nhận", required=False, max_length=500)
 
 
 class ReopenReaderForm(forms.Form):
-    reader_number = forms.CharField(label="Mã bạn đọc cần mở lại", max_length=32)
+    reader_number = forms.CharField(label="Mã bạn đọc cần mở lại", max_length=32, widget=forms.TextInput(attrs={"data-lookup": "readers"}))
     reason = forms.CharField(label="Căn cứ mở lại hồ sơ", max_length=500)
 
 
