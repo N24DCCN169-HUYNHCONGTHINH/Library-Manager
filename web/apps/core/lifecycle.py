@@ -30,8 +30,13 @@ def record_security_event(subject, kind, actor=None, details=None, reason=""):
 
 
 def _send_mail(subject, message, recipient, *, fail_silently=False):
+    from .email_backend import EmailDeliveryError
     try:
         sent = send_mail(subject, message, None, [recipient], fail_silently=fail_silently)
+    except EmailDeliveryError as exc:
+        if fail_silently:
+            return 0
+        raise ValidationError(exc.public_message) from None
     except Exception as exc:
         if fail_silently:
             return 0
