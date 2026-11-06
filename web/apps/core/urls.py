@@ -1,8 +1,13 @@
 from django.urls import path
 from . import views
-from . import reader_views, account_views, operations_views
+from . import reader_views, account_views, operations_views, registration
 
 urlpatterns = [
+    path("accounts/register/", registration.signup, name="reader_signup"),
+    path("accounts/register/done/", registration.signup_done, name="reader_signup_done"),
+    path("accounts/register/confirm/<str:token>/", registration.confirm_signup, name="reader_signup_confirm"),
+    path("staff/accounts/registrations/", registration.registration_list, name="reader_registration_list"),
+    path("staff/accounts/registrations/<int:registration_id>/", registration.registration_review, name="reader_registration_review"),
     path("staff/access/", operations_views.role_inspector, name="role_inspector"),
     path("staff/operations/", operations_views.operations, name="operations"),
     path("staff/operations/backup/", operations_views.backup_download, name="backup_download"),

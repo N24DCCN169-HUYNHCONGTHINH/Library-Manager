@@ -219,3 +219,23 @@ class EmailLoginChallenge(models.Model):
     created_at = models.DateTimeField(default=timezone.now)
     expires_at = models.DateTimeField()
     consumed_at = models.DateTimeField(null=True, blank=True)
+
+
+class ReaderRegistration(models.Model):
+    class Status(models.TextChoices):
+        PENDING = "pending", "Chờ duyệt"
+        APPROVED = "approved", "Đã duyệt"
+        REJECTED = "rejected", "Từ chối"
+
+    user = models.OneToOneField(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="reader_registration")
+    status = models.CharField(max_length=12, choices=Status.choices, default=Status.PENDING, db_index=True)
+    submitted_at = models.DateTimeField(default=timezone.now)
+    source_digest = models.CharField(max_length=64, db_index=True)
+    email_verified_at = models.DateTimeField(null=True, blank=True)
+    reviewed_by = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.PROTECT, related_name="reviewed_reader_registrations")
+    reviewed_at = models.DateTimeField(null=True, blank=True)
+    review_reason = models.CharField(max_length=300, blank=True)
+
+    class Meta:
+        ordering = ["-submitted_at", "-pk"]
+        permissions = [("approve_reader_registration", "Can approve public reader registrations")]

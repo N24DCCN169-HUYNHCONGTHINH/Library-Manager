@@ -30,7 +30,7 @@ ROLE_PERMISSIONS = {
     "cataloger": CATALOG,
     "circulation_staff": CIRCULATION_VIEW | CIRCULATION_ACTIONS | READERS,
     "librarian": CATALOG | CIRCULATION_VIEW | CIRCULATION_ACTIONS | READERS | POLICY | BUSINESS_APPROVAL,
-    "system_admin": ACCOUNT_MANAGEMENT | {"auth.view_group", "core.assign_account_roles", "core.manage_system_operations"},
+    "system_admin": ACCOUNT_MANAGEMENT | {"auth.view_group", "core.assign_account_roles", "core.manage_system_operations", "core.approve_reader_registration"},
 }
 # Kept only for existing installations. Never offered as a sixth new role.
 ROLE_PERMISSIONS[LEGACY_ROLE] = ROLE_PERMISSIONS["librarian"] | ACCOUNT_MANAGEMENT | {"core.verify_account_email"}

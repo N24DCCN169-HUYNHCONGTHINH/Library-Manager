@@ -152,6 +152,9 @@ def accept_account_invitation(raw_token, password):
     user = get_user_model().objects.select_for_update().get(pk=invitation.user_id)
     if user.is_active or user.email.casefold() != invitation.invited_email.casefold():
         raise ValidationError("Lời mời không còn áp dụng cho tài khoản này.")
+    from .models import ReaderRegistration
+    if ReaderRegistration.objects.filter(user=user).exclude(status="approved").exists():
+        raise ValidationError("Đăng ký độc giả cần được System Admin phê duyệt trước.")
     from django.contrib.auth.password_validation import validate_password
     validate_password(password, user=user)
     user.set_password(password)
@@ -290,6 +293,9 @@ def set_account_active(*, subject, actor, is_active, reason=""):
     if not is_active and subject.is_superuser and not actor.is_superuser:
         raise ValidationError("Chỉ một superuser khác mới được khóa tài khoản superuser.")
     security, _ = AccountSecurity.objects.get_or_create(user=subject)
+    from .models import ReaderRegistration
+    if is_active and ReaderRegistration.objects.filter(user=subject).exclude(status="approved").exists():
+        raise ValidationError("Hãy xử lý yêu cầu tại mục duyệt đăng ký độc giả trước.")
     if is_active and not security.email_is_verified:
         raise ValidationError("Chỉ mở lại tài khoản sau khi email đã được xác minh.")
     if subject.is_active == is_active:
