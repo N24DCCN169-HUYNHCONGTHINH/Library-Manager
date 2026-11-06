@@ -116,6 +116,8 @@ class RoleFeatureTests(TestCase):
         review_waiver(row.pk,self.librarian,"approve","Đồng ý")
         self.fine.refresh_from_db();self.assertEqual(self.fine.balance,3000);self.assertEqual(FinePayment.objects.count(),1)
     def test_role_inspector_and_new_screens_render(self):
+        self.login(self.librarian)
+        self.assertContains(self.client.get(reverse("library:staff_loan_detail",args=[self.loan_a.pk])),reverse("library:payment_start",args=[self.fine.pk]))
         for user,names in [(self.system_admin,["operations","role_inspector","backup_download","restore_rehearsal"]),(self.librarian,["library:policies","library:waivers","library:reports"]),(self.reader_a,["library:payment_history"])]:
             self.login(user)
             for name in names:self.assertEqual(self.client.get(reverse(name)).status_code,200,name)
