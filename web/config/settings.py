@@ -73,6 +73,7 @@ AXES_USE_ATTEMPT_EXPIRATION = True
 AXES_LOCKOUT_PARAMETERS = [["username", "ip_address"]]
 AXES_RESET_ON_SUCCESS = True
 AXES_ENABLE_RETRY_AFTER_HEADER = True
+AXES_WHITELIST_CALLABLE = "apps.core.login_policy.testing_lockout_exemption"
 
 database_url = os.getenv("LIBRARY_APP_DATABASE_URL", "").strip() or os.getenv("DATABASE_URL", "").strip()
 if os.getenv("DJANGO_DB_USE_UNPOOLED", "").lower() in {"1", "true", "yes"}:

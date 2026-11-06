@@ -62,7 +62,7 @@ class AccountUserAdmin(UserAdmin):
 class AccountSecurityAdmin(admin.ModelAdmin):
     list_display = ("user", "verified_email", "email_is_verified", "email_verified_at", "must_change_password")
     search_fields = ("verified_email", "user__username", "user__email")
-    readonly_fields = ("verified_email", "email_verified_at", "must_change_password", "created_at", "updated_at")
+    readonly_fields = ("verified_email", "email_verified_at", "must_change_password", "password_lockout_exempt", "created_at", "updated_at")
     actions = ("verify_account_emails", "require_password_reset", "disable_accounts", "reactivate_accounts", "revoke_authenticator_devices")
     change_list_template = "admin/core/accountsecurity/change_list.html"
 

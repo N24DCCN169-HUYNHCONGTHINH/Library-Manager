@@ -25,6 +25,7 @@ class AccountSecurityEvent(models.Model):
         ACCOUNT_REACTIVATED = "account_reactivated", "Đã mở khóa tài khoản"
         TOTP_ENROLLED = "totp_enrolled", "Đã đăng ký thiết bị xác thực"
         TOTP_REVOKED = "totp_revoked", "Đã thu hồi thiết bị xác thực"
+        LOCKOUT_EXCEPTION = "lockout_exception", "Đã thay đổi ngoại lệ khóa đăng nhập khi thử nghiệm"
 
     subject = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="security_events")
     actor = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name="performed_security_events")
@@ -49,6 +50,7 @@ class AccountSecurity(models.Model):
     verified_email = models.EmailField("email đã xác minh", blank=True)
     email_verified_at = models.DateTimeField("xác minh lúc", null=True, blank=True)
     must_change_password = models.BooleanField("bắt buộc đổi mật khẩu", default=False)
+    password_lockout_exempt = models.BooleanField("miễn khóa sai mật khẩu khi thử nghiệm", default=False)
     created_at = models.DateTimeField("tạo lúc", auto_now_add=True)
     updated_at = models.DateTimeField("cập nhật lúc", auto_now=True)
 
