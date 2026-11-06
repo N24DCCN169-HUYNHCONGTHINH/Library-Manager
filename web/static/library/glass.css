@@ -209,3 +209,5 @@ html{scroll-padding-top:calc(var(--chrome-offset) + 16px)}
 @media(max-height:580px){html[data-bs-theme] body .app-sidebar .rail-link{height:34px;min-height:34px;width:38px}html[data-bs-theme] body .rail-group{margin-bottom:8px;padding-top:5px;padding-bottom:5px}html[data-bs-theme] body .rail-brand{margin-bottom:12px}}
 
 .top-nav{scrollbar-width:none}.top-nav::-webkit-scrollbar{display:none}
+
+::view-transition-group(library-rail){z-index:100}::view-transition-group(library-topbar){z-index:90}::view-transition-group(library-content){z-index:2}::view-transition-group(library-backdrop){z-index:0}
