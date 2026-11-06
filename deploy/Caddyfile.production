@@ -1,0 +1,14 @@
+{
+	email {$LIBRARY_TLS_EMAIL}
+}
+
+{$LIBRARY_DOMAIN} {
+	encode gzip
+	handle_path /static/* {
+		root * {$LIBRARY_STATIC_ROOT}
+		file_server
+	}
+	handle {
+		reverse_proxy 127.0.0.1:9080
+	}
+}

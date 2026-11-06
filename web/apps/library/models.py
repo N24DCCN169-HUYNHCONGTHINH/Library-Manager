@@ -205,6 +205,12 @@ class ReaderRestriction(models.Model):
         return self.resolved_at is None
 
 
+class CirculationMutex(models.Model):
+    """One database row serializes circulation writes for the small internal MVP."""
+
+    id = models.PositiveSmallIntegerField(primary_key=True, default=1, editable=False)
+
+
 class Loan(models.Model):
     class Status(models.TextChoices):
         OPEN = "open", "Đang mượn"
@@ -225,7 +231,10 @@ class Loan(models.Model):
     due_at = models.DateTimeField(db_index=True)
     returned_at = models.DateTimeField(null=True, blank=True)
     renewal_count = models.PositiveSmallIntegerField(default=0)
+    max_renewals_snapshot = models.PositiveSmallIntegerField(default=1)
+    renewal_days_snapshot = models.PositiveSmallIntegerField(default=7)
     idempotency_key = models.UUIDField(null=True, blank=True, unique=True)
+    return_idempotency_key = models.UUIDField(null=True, blank=True, unique=True)
     created_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="created_loans")
     returned_by = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.PROTECT, related_name="closed_loans")
     created_at = models.DateTimeField(auto_now_add=True)
@@ -251,6 +260,7 @@ class LoanRenewal(models.Model):
     renewed_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="loan_renewals")
     renewed_at = models.DateTimeField(default=timezone.now)
     reason = models.CharField(max_length=500, blank=True)
+    idempotency_key = models.UUIDField(null=True, blank=True, unique=True)
 
 
 class Reservation(models.Model):
@@ -275,9 +285,20 @@ class Reservation(models.Model):
 
     class Meta:
         ordering = ["created_at", "id"]
-        constraints = [models.UniqueConstraint(fields=["reader", "book"], condition=Q(status__in=["waiting", "ready"]), name="uniq_active_reservation_reader_book")]
+        constraints = [
+            models.UniqueConstraint(fields=["reader", "book"], condition=Q(status__in=["waiting", "ready"]), name="uniq_active_reservation_reader_book"),
+            models.UniqueConstraint(fields=["copy"], condition=Q(status="ready"), name="uniq_ready_reservation_copy"),
+        ]
         indexes = [models.Index(fields=["book", "status", "created_at"])]
         permissions = [("manage_reservation", "Can manage reader reservations")]
+
+
+class ReservationNotification(models.Model):
+    reservation = models.OneToOneField(Reservation, on_delete=models.PROTECT, related_name="notification")
+    created_at = models.DateTimeField(default=timezone.now)
+    sent_at = models.DateTimeField(null=True, blank=True)
+    last_error = models.CharField(max_length=300, blank=True)
+    attempts = models.PositiveIntegerField(default=0)
 
 
 class Fine(models.Model):
@@ -315,6 +336,7 @@ class FinePayment(models.Model):
     kind = models.CharField(max_length=16, choices=Kind.choices)
     amount = models.DecimalField(max_digits=10, decimal_places=0, validators=[MinValueValidator(1)])
     receipt_number = models.CharField(max_length=40, unique=True)
+    idempotency_key = models.UUIDField(null=True, blank=True, unique=True)
     reason = models.CharField(max_length=500, blank=True)
     created_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="fine_transactions")
     approved_by = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.PROTECT, related_name="approved_fine_transactions")

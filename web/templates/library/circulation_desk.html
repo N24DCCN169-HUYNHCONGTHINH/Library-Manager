@@ -1,13 +1,25 @@
 {% extends "base.html" %}
 {% block title %}Quầy mượn/trả · Quản lý thư viện{% endblock %}
 {% block content %}
-<section class="card"><h1>Quầy mượn/trả</h1>
-  <h2>Ghi nhận mượn</h2><form method="post">{% csrf_token %}<input type="hidden" name="action" value="checkout">{{ checkout_form.as_p }}<button type="submit">Xác nhận mượn</button></form>
-  <h2>Ghi nhận trả</h2><form method="post">{% csrf_token %}<input type="hidden" name="action" value="return">{{ return_form.as_p }}<button type="submit">Xác nhận trả</button></form>
+<div class="page-intro"><div><div class="eyebrow">DỊCH VỤ TẠI QUẦY</div><h1>Quầy mượn/trả</h1><p class="muted">Quét mã thẻ bạn đọc và mã vạch từng bản sách để bắt đầu.</p></div></div><div class="section-links"><a href="#open-loans">Lượt đang mở</a><a href="#reservations">Đặt trước</a><a href="#fines">Khoản phạt</a></div>{% if messages %}<section class="card">{% for message in messages %}<p role="status">{{ message }}</p>{% endfor %}</section>{% endif %}<div class="desk-grid">
+  {% if perms.library.checkout_loan %}
+  <section class="card scan-form"><div class="eyebrow">01 / CHO MƯỢN</div><h2>Ghi nhận mượn</h2><form method="post">{% csrf_token %}<input type="hidden" name="action" value="checkout">{{ checkout_form.as_p }}<button type="submit">Xác nhận mượn</button></form></section>
+  {% endif %}
+  {% if perms.library.return_loan %}
+  <section class="card scan-form"><div class="eyebrow">02 / NHẬN SÁCH</div><h2>Ghi nhận trả</h2><form method="post">{% csrf_token %}<input type="hidden" name="action" value="return">{{ return_form.as_p }}<button type="submit">Xác nhận trả</button></form></section>
+  {% endif %}
+</div><section class="card mt-4">
+  {% if perms.library.renew_loan %}
+  <h2>Gia hạn tại quầy</h2><form method="post">{% csrf_token %}<input type="hidden" name="action" value="renew">{{ renewal_form.as_p }}<button type="submit">Xác nhận gia hạn</button></form>
+  {% endif %}
 </section>
-<section class="card"><h2>Lượt đang mở</h2>{% for loan in loans %}<p>{{ loan.reader.reader_number }} · {{ loan.copy.book.title }} · {{ loan.copy.barcode }} · hạn {{ loan.due_at|date:"d/m/Y H:i" }}</p>{% empty %}<p>Không có lượt mượn đang mở.</p>{% endfor %}</section>
-<section class="card"><h2>Thu khoản phạt</h2>
+<section class="card" id="open-loans"><h2>Lượt đang mở (tối đa 50)</h2>{% for loan in loans %}<p>#{{ loan.pk }} · {{ loan.reader.reader_number }} · {{ loan.copy.book.title }} · {{ loan.copy.barcode }} · hạn {{ loan.due_at|date:"d/m/Y H:i" }} · đã gia hạn {{ loan.renewal_count }} lần</p>{% empty %}<p>Không có lượt mượn đang mở.</p>{% endfor %}</section>
+<section class="card" id="reservations"><h2>Hàng chờ và giữ chỗ (tối đa 50)</h2>
+{% for reservation in reservations %}<p>#{{ reservation.pk }} · {{ reservation.reader.reader_number }} · {{ reservation.book.title }} · {{ reservation.get_status_display }}{% if reservation.copy %} · {{ reservation.copy.barcode }}{% endif %}{% if reservation.expires_at %} · hạn nhận {{ reservation.expires_at|date:"d/m/Y H:i" }}{% endif %}{% if reservation.notification.sent_at %} · Email đã gửi{% elif reservation.notification.last_error %} · Email lỗi, cần gửi lại{% elif reservation.status == "ready" %} · Email chờ gửi{% endif %}</p>{% empty %}<p>Không có yêu cầu đang chờ.</p>{% endfor %}
+{% if perms.library.manage_reservation %}<form method="post">{% csrf_token %}<input type="hidden" name="action" value="expire"><button type="submit">Xử lý giữ chỗ hết hạn</button></form>{% endif %}
+</section>
+<section class="card" id="fines"><h2>Thu khoản phạt</h2>
   {% for fine in unpaid_fines %}<p>#{{ fine.id }} · {{ fine.loan.reader.reader_number }} · {{ fine.loan.copy.book.title }} · còn {{ fine.balance }} ₫</p>{% empty %}<p>Không có khoản phạt đến hạn.</p>{% endfor %}
-  <form method="post">{% csrf_token %}<input type="hidden" name="action" value="payment">{{ payment_form.as_p }}<button type="submit">Ghi nhận thanh toán</button></form>
+  {% if perms.library.collect_finepayment %}<form method="post">{% csrf_token %}<input type="hidden" name="action" value="payment">{{ payment_form.as_p }}<button type="submit">Ghi nhận thanh toán</button></form>{% endif %}
 </section>
 {% endblock %}

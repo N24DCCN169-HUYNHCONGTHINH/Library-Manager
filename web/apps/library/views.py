@@ -1,15 +1,51 @@
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required, user_passes_test
 from django.core.exceptions import ObjectDoesNotExist
+from django.core.paginator import Paginator
 from django.db.models import Count, Exists, OuterRef, Prefetch, Q
 from django.http import HttpResponseForbidden
 from django.shortcuts import get_object_or_404, redirect, render
+from django.utils import timezone
+from django.views.decorators.cache import never_cache
+from django.views.decorators.http import require_POST
 
 from apps.core.models import ReaderProfile
 from apps.core.views import has_role, staff_mfa_required
-from .forms import CheckoutForm, FinePaymentForm, ReturnForm
+from .forms import BookForm, CheckoutForm, FinePaymentForm, ReturnForm, RenewalForm
 from .models import Book, BookCopy, Fine, LibraryBranch, Loan, Reservation
-from .services import CirculationError, cancel_reservation, checkout_copy, place_reservation, record_fine_payment, renew_loan, return_copy
+from .services import CirculationError, cancel_reservation, checkout_copy, place_reservation, record_fine_payment, renew_loan, return_copy, expire_ready_reservations
+
+
+@staff_mfa_required
+def book_list(request):
+    if not request.user.has_perm("library.view_book"):
+        return HttpResponseForbidden("Bạn không được cấp quyền xem danh mục nội bộ.")
+    query = request.GET.get("q", "").strip()
+    books = Book.objects.all().order_by("title", "pk")
+    if query:
+        books = books.filter(Q(title__icontains=query) | Q(authors__icontains=query)
+                             | Q(catalog_number__icontains=query) | Q(isbn__icontains=query))
+    return render(request, "library/book_list.html", {
+        "page_obj": Paginator(books, 25).get_page(request.GET.get("page")), "query": query,
+    })
+
+
+@staff_mfa_required
+def book_edit(request, book_id=None):
+    permission = "library.add_book" if book_id is None else "library.change_book"
+    if not request.user.has_perm(permission):
+        return HttpResponseForbidden("Bạn không được cấp quyền thay đổi danh mục.")
+    book = get_object_or_404(Book, pk=book_id) if book_id is not None else None
+    form = BookForm(request.POST if request.method == "POST" else None, instance=book)
+    if request.method == "POST" and form.is_valid():
+        book = form.save(commit=False)
+        if book_id is None:
+            book.created_by = request.user
+        book.updated_by = request.user
+        book.save()
+        messages.success(request, "Đã lưu thông tin sách.")
+        return redirect("library:book_list")
+    return render(request, "library/book_form.html", {"form": form, "book": book})
 
 
 def catalog(request):
@@ -32,10 +68,15 @@ def catalog(request):
         available_filter = Q(copies__status=BookCopy.Status.AVAILABLE, copies__is_active=True)
         copies = BookCopy.objects.filter(is_active=True).select_related("branch")
     books = books.annotate(
-        available_copies_count=Count("copies", filter=available_filter),
+        available_copies_count=Count("copies", filter=available_filter, distinct=True),
         has_available_copies_anywhere=Exists(BookCopy.objects.filter(
             book_id=OuterRef("pk"), status=BookCopy.Status.AVAILABLE, is_active=True,
         )),
+        has_loanable_copies=Exists(BookCopy.objects.filter(book_id=OuterRef("pk"), is_active=True)
+            .filter(Q(home_loan_override=True) | Q(home_loan_override__isnull=True, book__loan_mode=Book.LoanMode.HOME_LOAN))),
+        has_available_loanable_copies=Exists(BookCopy.objects.filter(book_id=OuterRef("pk"), is_active=True,
+            status=BookCopy.Status.AVAILABLE).filter(Q(home_loan_override=True)
+            | Q(home_loan_override__isnull=True, book__loan_mode=Book.LoanMode.HOME_LOAN))),
     ).prefetch_related(
         Prefetch("copies", queryset=copies, to_attr="catalog_copies")
     ).distinct()
@@ -49,33 +90,53 @@ def catalog(request):
 def circulation_desk(request):
     if not (request.user.is_superuser or (request.user.has_perm("library.view_loan") and request.user.has_perm("library.view_fine"))):
         return HttpResponseForbidden("Bạn không được cấp quyền xem quầy lưu thông.")
-    checkout_form = CheckoutForm(request.POST if request.method == "POST" and request.POST.get("action") == "checkout" else None)
-    return_form = ReturnForm(request.POST if request.method == "POST" and request.POST.get("action") == "return" else None)
-    payment_form = FinePaymentForm(request.POST if request.method == "POST" and request.POST.get("action") == "payment" else None)
+    checkout_form = CheckoutForm(request.POST if request.method == "POST" and request.POST.get("action") == "checkout" else None, auto_id="checkout_%s")
+    return_form = ReturnForm(request.POST if request.method == "POST" and request.POST.get("action") == "return" else None, auto_id="return_%s")
+    payment_form = FinePaymentForm(request.POST if request.method == "POST" and request.POST.get("action") == "payment" else None, auto_id="payment_%s")
+    renewal_form = RenewalForm(request.POST if request.method == "POST" and request.POST.get("action") == "renew" else None, auto_id="renewal_%s")
     if request.method == "POST":
         try:
-            if request.POST.get("action") == "checkout" and checkout_form.is_valid():
-                loan = checkout_copy(checkout_form.cleaned_data["reader_number"], checkout_form.cleaned_data["barcode"], request.user)
-                messages.success(request, f"Đã ghi nhận mượn. Hạn trả: {loan.due_at:%d/%m/%Y %H:%M}.")
-            elif request.POST.get("action") == "return" and return_form.is_valid():
-                loan = return_copy(return_form.cleaned_data["barcode"], request.user, return_form.cleaned_data["condition_note"])
-                if loan:
-                    messages.success(request, "Đã ghi nhận trả sách." + (" Bản sách đang chờ kiểm tra tình trạng." if return_form.cleaned_data["condition_note"] else ""))
+            action = request.POST.get("action")
+            forms = {"checkout": checkout_form, "return": return_form, "payment": payment_form, "renew": renewal_form}
+            permissions = {"checkout": "checkout_loan", "return": "return_loan", "payment": "collect_finepayment", "renew": "renew_loan", "expire": "manage_reservation"}
+            if action not in permissions:
+                messages.error(request, "Thao tác không hợp lệ.")
+            elif not request.user.has_perm(f"library.{permissions[action]}"):
+                return HttpResponseForbidden("Bạn không được cấp quyền thực hiện thao tác này.")
+            elif action == "expire":
+                count = expire_ready_reservations()
+                messages.success(request, f"Đã xử lý {count} yêu cầu hết hạn giữ chỗ.")
+                return redirect("library:circulation_desk")
+            elif forms[action].is_valid():
+                data = forms[action].cleaned_data
+                if action == "checkout":
+                    loan = checkout_copy(data["reader_number"], data["barcode"], request.user, data["idempotency_key"])
+                    messages.success(request, f"Đã ghi nhận mượn #{loan.pk}. Hạn trả: {timezone.localtime(loan.due_at):%d/%m/%Y %H:%M}.")
+                elif action == "return":
+                    loan = return_copy(data["barcode"], request.user, data["condition_note"], data["idempotency_key"])
+                    messages.success(request, "Đã xử lý trả sách; bản bất thường được giữ để kiểm tra." if data["condition_note"] else "Đã xử lý trả sách, không tạo lượt trả trùng.")
+                elif action == "renew":
+                    loan = renew_loan(data["loan_id"], request.user, data["idempotency_key"])
+                    messages.success(request, f"Đã gia hạn #{loan.pk}. Hạn mới: {timezone.localtime(loan.due_at):%d/%m/%Y %H:%M}.")
                 else:
-                    messages.info(request, "Bản sách đã ở trạng thái sẵn sàng; không tạo giao dịch trả trùng.")
-            elif request.POST.get("action") == "payment" and payment_form.is_valid():
-                row = record_fine_payment(payment_form.cleaned_data["fine_id"], payment_form.cleaned_data["amount"], request.user, reason=payment_form.cleaned_data["reason"])
-                messages.success(request, f"Đã ghi nhận thanh toán. Biên nhận: {row.receipt_number}.")
-            return redirect("library:circulation_desk")
-        except (CirculationError, ReaderProfile.DoesNotExist, BookCopy.DoesNotExist, Fine.DoesNotExist) as exc:
-            messages.error(request, str(exc) or "Không tìm thấy bạn đọc hoặc bản sách.")
+                    row = record_fine_payment(data["fine_id"], data["amount"], request.user, reason=data["reason"], idempotency_key=data["idempotency_key"])
+                    messages.success(request, f"Đã ghi nhận thanh toán. Biên nhận: {row.receipt_number}.")
+                return redirect("library:circulation_desk")
+        except (CirculationError, ObjectDoesNotExist) as exc:
+            if action in forms:
+                forms[action].add_error(None, str(exc) if isinstance(exc, CirculationError) else "Không tìm thấy độc giả, bản sách hoặc lượt giao dịch.")
+            else:
+                messages.error(request, str(exc))
     loans = Loan.objects.filter(status=Loan.Status.OPEN).select_related("reader", "copy__book").order_by("due_at")[:50]
     unpaid_fines = Fine.objects.filter(status=Fine.Status.DUE).select_related("loan__reader", "loan__copy__book").order_by("calculated_at")[:50]
-    return render(request, "library/circulation_desk.html", {"checkout_form": checkout_form, "return_form": return_form, "payment_form": payment_form, "loans": loans, "unpaid_fines": unpaid_fines})
+    reservations = Reservation.objects.select_related("reader", "book", "copy", "notification").filter(status__in=[Reservation.Status.WAITING, Reservation.Status.READY]).order_by("created_at", "pk")[:50]
+    return render(request, "library/circulation_desk.html", {"checkout_form": checkout_form, "return_form": return_form, "payment_form": payment_form, "renewal_form": renewal_form, "loans": loans, "unpaid_fines": unpaid_fines, "reservations": reservations})
 
 
+@never_cache
 @login_required
 @user_passes_test(has_role("reader"), login_url="home")
+@require_POST
 def reserve(request, book_id):
     if request.method == "POST":
         try:
@@ -87,26 +148,31 @@ def reserve(request, book_id):
     return redirect("library:catalog")
 
 
+@never_cache
 @login_required
 @user_passes_test(has_role("reader"), login_url="home")
+@require_POST
 def renew(request, loan_id):
     if request.method == "POST":
         try:
             profile = request.user.reader_profile
             loan = get_object_or_404(Loan, pk=loan_id, reader=profile)
             loan = renew_loan(loan.pk, request.user)
-            messages.success(request, f"Đã gia hạn. Hạn trả mới: {loan.due_at:%d/%m/%Y %H:%M}.")
+            messages.success(request, f"Đã gia hạn. Hạn trả mới: {timezone.localtime(loan.due_at):%d/%m/%Y %H:%M}.")
         except (CirculationError, ObjectDoesNotExist) as exc:
             messages.error(request, str(exc) or "Không thể gia hạn lượt mượn.")
     return redirect("reader_portal")
 
 
+@never_cache
 @login_required
 @user_passes_test(has_role("reader"), login_url="home")
+@require_POST
 def cancel_reservation_view(request, reservation_id):
     if request.method == "POST":
         try:
             profile = request.user.reader_profile
+            get_object_or_404(Reservation, pk=reservation_id, reader=profile)
             cancel_reservation(profile, reservation_id, request.user)
             messages.success(request, "Đã hủy yêu cầu đặt trước.")
         except (CirculationError, ObjectDoesNotExist) as exc:

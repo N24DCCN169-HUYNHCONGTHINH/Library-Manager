@@ -50,5 +50,7 @@ Khi thêm bảng hoặc sequence, người chạy migrations cần dùng `librar
 | Ngày | Trạng thái | Kết quả |
 |---|---|---|
 | 01/11/2026 | Đã xác minh | Migrations đã áp dụng bằng `library_migrator`; xác minh bằng URL pooled của `library_app` báo PostgreSQL 18.6, TLS `verify-full`, không còn migrations chờ. Thử tạo bảng bằng migrator và thêm/đọc dòng cùng sequence bằng app thành công; bảng thử đã xóa. `/library/catalog/` trả HTTP 200. Working tree chưa commit. |
+| 06/11/2026 | Ngày 5–7 | Đã kiểm tra không có READY giữ trùng, áp migration `library.0004_circulation_safety` bằng migrator và đồng bộ quyền. Kết nối app pooled xác nhận TLS verify-full, không còn migration chờ. Thử luồng lưu thông và render trang bằng dữ liệu tổng hợp trong giao dịch hoàn tác; thử hai kết nối tranh hàng khóa thành công, không giữ dữ liệu thử. Chi tiết trong biên bản ngày 5–7. |
+| 06/11/2026 | Ngày 11 | Áp migration `library.0005_payment_idempotency` bằng migrator; app pooled xác minh TLS verify-full, không còn migration chờ. Thử thu một phần gửi lại chỉ tạo một khoản thu, cùng các luồng lưu thông trong giao dịch hoàn tác. Backup sau sửa 514 bản ghi, restore riêng đối soát đạt. Không thay số tiền/biên nhận cũ. |
 
 Không ghi mật khẩu hoặc connection URI đầy đủ vào nhật ký, tài liệu hoặc ảnh chụp màn hình.
