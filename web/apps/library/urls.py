@@ -2,9 +2,11 @@ from django.urls import path
 
 from . import views, management_views, reports, payments
 from .lookup import lookup
+from .desk_browser import desk_browser
 
 app_name = "library"
 urlpatterns = [
+    path("staff/circulation/browse/", desk_browser, name="desk_browser"),
     path("staff/reports/", reports.reports, name="reports"),
     path("staff/policies/", management_views.policies, name="policies"),
     path("staff/waivers/", management_views.waivers, name="waivers"),

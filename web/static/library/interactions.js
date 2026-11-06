@@ -14,6 +14,9 @@
         if (link.dataset.deskTab === name) link.setAttribute('aria-current','page'); else link.removeAttribute('aria-current');
       });
       desk.dataset.activeTab = name;
+      const browser = document.getElementById('desk-browser');
+      if(browser){browser.hidden=!['checkout','return'].includes(name);browser.querySelector('input[name=tab]').value=name;}
+      desk.dispatchEvent(new CustomEvent('desk:tab-change',{detail:{tab:name}}));
       if (push) { const url = new URL(location.href); url.searchParams.set('tab',name); url.hash=''; if(url.href!==location.href)history.pushState({},'',url); }
     };
     activate(legacy[location.hash.slice(1)] || desk.dataset.activeTab);

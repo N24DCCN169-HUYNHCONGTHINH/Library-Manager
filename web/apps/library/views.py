@@ -198,7 +198,10 @@ def circulation_desk(request):
     overdue_loans = [loan for loan in loans if loan.due_at < timezone.now()]
     unpaid_fines = Fine.objects.filter(status=Fine.Status.DUE).select_related("loan__reader", "loan__copy__book").defer('loan__copy__book__cover_image').prefetch_related("transactions").order_by("calculated_at")[:50]
     reservations = Reservation.objects.select_related("reader", "book", "copy", "notification").defer('book__cover_image').filter(status__in=[Reservation.Status.WAITING, Reservation.Status.READY]).order_by("created_at", "pk")[:50]
-    return render(request, "library/circulation_desk.html", {"checkout_form": checkout_form, "return_form": return_form, "payment_form": payment_form, "renewal_form": renewal_form, "reopen_form": reopen_form, "loans": loans, "overdue_loans": overdue_loans, "active_tab": active_tab,
+    from .desk_browser import browser_context
+    try: browse = browser_context(request)
+    except PermissionError: return HttpResponseForbidden()
+    return render(request, "library/circulation_desk.html", {**browse,"checkout_form": checkout_form, "return_form": return_form, "payment_form": payment_form, "renewal_form": renewal_form, "reopen_form": reopen_form, "loans": loans, "overdue_loans": overdue_loans, "active_tab": active_tab,
         "damage_cases": DamageCase.objects.select_related("loan__copy__book", "loan__reader").defer('loan__copy__book__cover_image').order_by("-reported_at")[:50] if request.user.has_perm("library.view_damagecase") else [],
         "loan_notices": LoanNotification.objects.select_related("loan__copy__book", "loan__reader").defer('loan__copy__book__cover_image').order_by("-created_at")[:50] if request.user.has_perm("library.view_loannotification") else [],
         "unpaid_fines": unpaid_fines, "reservations": reservations})
