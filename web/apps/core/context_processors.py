@@ -15,3 +15,11 @@ def library_roles(request):
             "staff_roles": sorted(roles & staff_roles),
         }
     }
+
+
+def appearance_context(request):
+    from .models import AppearancePreferences
+    prefs = None
+    if request.user.is_authenticated:
+        prefs = AppearancePreferences.objects.defer("avatar_image", "background_image").filter(user=request.user).first()
+    return {"appearance_prefs": prefs}

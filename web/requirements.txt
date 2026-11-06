@@ -5,3 +5,5 @@ psycopg[binary]>=3.2,<4.0
 django-otp>=1.7.5,<1.8
 django-axes>=9.0,<9.1
 waitress>=3.0,<4.0
+
+Pillow>=11.3,<14

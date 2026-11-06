@@ -7,6 +7,7 @@ from django.utils import timezone
 
 class AccountSecurityEvent(models.Model):
     class Kind(models.TextChoices):
+        PROFILE_UPDATED = "profile_updated", "Đã sửa hồ sơ tài khoản"
         ACCOUNT_CREATED = "account_created", "Đã tạo tài khoản"
         ROLE_CHANGED = "role_changed", "Đã đổi vai trò"
         INVITATION_SENT = "invitation_sent", "Đã gửi lời mời"
@@ -165,3 +166,17 @@ class EmailChangeVerification(models.Model):
 
     class Meta:
         ordering = ["-created_at"]
+
+
+class AppearancePreferences(models.Model):
+    user = models.OneToOneField(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="appearance")
+    theme = models.CharField(max_length=10, choices=[("system", "Theo thiết bị"), ("light", "Sáng"), ("dark", "Tối")], default="system")
+    background_color = models.CharField(max_length=7, default="#f2f5f4", validators=[RegexValidator(r"^#[0-9a-fA-F]{6}$", "Nhập mã màu dạng #RRGGBB.")])
+    accent_color = models.CharField(max_length=7, default="#087f8c", validators=[RegexValidator(r"^#[0-9a-fA-F]{6}$", "Nhập mã màu dạng #RRGGBB.")])
+    icon_style = models.CharField(max_length=10, choices=[("thin", "Nét mảnh"), ("bold", "Nét đậm"), ("colored", "Có nền màu")], default="thin")
+    dashboard_icon = models.CharField(max_length=12, choices=[("grid", "Ô tổng quan"), ("book", "Quyển sách"), ("users", "Cộng đồng")], default="grid")
+    avatar_image = models.BinaryField(blank=True, default=bytes)
+    background_image = models.BinaryField(blank=True, default=bytes)
+    has_avatar = models.BooleanField(default=False)
+    has_background = models.BooleanField(default=False)
+    updated_at = models.DateTimeField(auto_now=True)

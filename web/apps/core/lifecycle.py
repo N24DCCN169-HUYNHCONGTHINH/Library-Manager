@@ -169,6 +169,15 @@ def accept_account_invitation(raw_token, password):
 def request_email_change(*, user, email, current_password, request):
     if not user.check_password(current_password):
         raise ValidationError("Mật khẩu hiện tại không đúng.")
+    return issue_email_confirmation(user=user, email=email, request=request, actor=user)
+
+
+@transaction.atomic
+def issue_email_confirmation(*, user, email, request, actor):
+    if actor.pk != user.pk and not actor.has_perm("core.manage_account_lifecycle"):
+        raise PermissionError("Không có quyền quản lý email.")
+    if actor.pk != user.pk and (user.is_superuser or user.groups.filter(name__in=["library_manager", "system_admin"]).exists()) and not actor.is_superuser:
+        raise PermissionError("Chỉ quản trị viên hệ thống được đổi email của tài khoản quản trị khác.")
     if get_user_model().objects.filter(email__iexact=email).exclude(pk=user.pk).exists():
         raise ValidationError("Email này đã gắn với tài khoản khác.")
     same_email = email.casefold() == (user.email or "").casefold()
@@ -201,7 +210,7 @@ def request_email_change(*, user, email, current_password, request):
             fail_silently=True,
             recipient=user.email,
         )
-    record_security_event(user, AccountSecurityEvent.Kind.EMAIL_CHANGE_REQUESTED, user, {"verification_id": verification.pk})
+    record_security_event(user, AccountSecurityEvent.Kind.EMAIL_CHANGE_REQUESTED, actor, {"verification_id": verification.pk})
     return verification
 
 
