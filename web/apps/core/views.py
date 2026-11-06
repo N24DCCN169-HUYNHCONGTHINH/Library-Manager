@@ -10,10 +10,11 @@ from django.contrib import messages
 from django.contrib.auth.decorators import login_required, user_passes_test
 from django.contrib.auth import views as auth_views
 from django.core.exceptions import ObjectDoesNotExist, ValidationError
+from django.core.paginator import Paginator
 from django.db import transaction
 from django.db.models import Q
 from django.http import HttpResponseBadRequest, JsonResponse
-from django.shortcuts import redirect, render
+from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
 from django.views.decorators.cache import never_cache
 from django_otp import login as otp_login
@@ -86,11 +87,14 @@ def home(request):
     return render(request, "core/home.html")
 
 
+@never_cache
 @staff_mfa_required
 def staff_dashboard(request):
-    return render(request, "core/staff_dashboard.html")
+    from .dashboard import dashboard_context
+    return render(request, "core/staff_dashboard.html", dashboard_context(request.user, request.GET))
 
 
+@never_cache
 @login_required
 @user_passes_test(has_role("reader"), login_url="home")
 def reader_portal(request):
@@ -99,16 +103,29 @@ def reader_portal(request):
     except ObjectDoesNotExist:
         profile = None
     loans = reservations = fines = []
+    summary = {}
+    loan_status = request.GET.get("loan_status", "")
     if profile:
         from apps.library.models import Fine, Loan, Reservation
-        from apps.library.services import refresh_overdue_loans
-        refresh_overdue_loans(profile)
-        loans = list(Loan.objects.filter(reader=profile).select_related("copy__book", "copy__branch", "policy").order_by("status", "due_at")[:100])
         now = timezone.now()
+        own_loans = Loan.objects.filter(reader=profile)
+        own_reservations = Reservation.objects.filter(reader=profile)
+        own_fines = Fine.objects.filter(loan__reader=profile).select_related("loan__copy__book").order_by("-calculated_at", "-pk")
+        summary = {"open_loans": own_loans.filter(status=Loan.Status.OPEN).count(),
+                   "overdue_loans": own_loans.filter(status=Loan.Status.OPEN, due_at__lt=now).count(),
+                   "active_reservations": own_reservations.filter(status__in=["waiting", "ready"]).count(),
+                   "balance": sum(fine.balance for fine in own_fines)}
+        if loan_status in Loan.Status.values:
+            own_loans = own_loans.filter(status=loan_status)
+        else:
+            loan_status = ""
+        loans = Paginator(own_loans.select_related("copy__book", "copy__branch", "policy")
+                          .order_by("-loaned_at", "-pk"), 20).get_page(request.GET.get("loan_page"))
         for loan in loans:
+            loan.is_overdue = loan.status == Loan.Status.OPEN and loan.due_at < now
             if loan.status != Loan.Status.OPEN:
                 loan.renewal_message = "Lượt mượn đã đóng."
-            elif loan.renewal_count >= loan.policy.max_renewals:
+            elif loan.renewal_count >= loan.max_renewals_snapshot:
                 loan.renewal_message = "Đã dùng hết số lần gia hạn theo chính sách."
             elif loan.due_at < now:
                 loan.renewal_message = "Lượt mượn đã quá hạn; vui lòng liên hệ quầy."
@@ -119,7 +136,8 @@ def reader_portal(request):
             else:
                 loan.can_request_renewal = loan.due_at >= now and loan.due_at - now <= timedelta(hours=48)
                 loan.renewal_message = "Có thể gửi yêu cầu; hệ thống sẽ kiểm tra lại tình trạng thẻ và điều kiện giao dịch."
-        reservations = Reservation.objects.filter(reader=profile, status__in=["waiting", "ready"]).select_related("book").order_by("created_at")
+        reservations = Paginator(own_reservations.select_related("book", "copy__branch")
+                                 .order_by("-created_at", "-pk"), 20).get_page(request.GET.get("reservation_page"))
         for reservation in reservations:
             if reservation.status == Reservation.Status.WAITING:
                 reservation.queue_position = Reservation.objects.filter(
@@ -128,8 +146,23 @@ def reader_portal(request):
                     Q(created_at__lt=reservation.created_at)
                     | Q(created_at=reservation.created_at, id__lte=reservation.id)
                 ).count()
-        fines = Fine.objects.filter(loan__reader=profile).select_related("loan__copy__book").order_by("-calculated_at")
-    return render(request, "core/reader_portal.html", {"profile": profile, "today": timezone.localdate(), "loans": loans, "reservations": reservations, "fines": fines})
+        fines = Paginator(own_fines, 20).get_page(request.GET.get("fine_page"))
+    return render(request, "core/reader_portal.html", {"profile": profile, "today": timezone.localdate(),
+        "loans": loans, "reservations": reservations, "fines": fines, "summary": summary,
+        "loan_status": loan_status})
+
+
+@never_cache
+@login_required
+@user_passes_test(has_role("reader"), login_url="home")
+def reader_loan_detail(request, loan_id):
+    from apps.library.models import Fine, Loan
+    loan = get_object_or_404(Loan.objects.select_related("copy__book", "copy__branch", "reader"),
+                             pk=loan_id, reader__user=request.user)
+    fine = Fine.objects.filter(loan=loan).first()
+    return render(request, "core/reader_loan_detail.html", {"loan": loan, "fine": fine,
+        "renewals": loan.renewals.order_by("renewed_at", "pk"),
+        "payments": fine.transactions.order_by("created_at", "pk") if fine else []})
 
 
 class AuditedPasswordChangeView(auth_views.PasswordChangeView):

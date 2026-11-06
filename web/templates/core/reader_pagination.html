@@ -1,0 +1,15 @@
+{% if page.paginator.num_pages > 1 %}
+<nav aria-label="Phân trang {{ section }}">
+  <span>Trang {{ page.number }} / {{ page.paginator.num_pages }}</span>
+  {% if section == "loan" %}
+    {% if page.has_previous %}<a href="{% querystring loan_page=page.previous_page_number %}">Trang trước</a>{% endif %}
+    {% if page.has_next %}<a href="{% querystring loan_page=page.next_page_number %}">Trang sau</a>{% endif %}
+  {% elif section == "reservation" %}
+    {% if page.has_previous %}<a href="{% querystring reservation_page=page.previous_page_number %}">Trang trước</a>{% endif %}
+    {% if page.has_next %}<a href="{% querystring reservation_page=page.next_page_number %}">Trang sau</a>{% endif %}
+  {% else %}
+    {% if page.has_previous %}<a href="{% querystring fine_page=page.previous_page_number %}">Trang trước</a>{% endif %}
+    {% if page.has_next %}<a href="{% querystring fine_page=page.next_page_number %}">Trang sau</a>{% endif %}
+  {% endif %}
+</nav>
+{% endif %}

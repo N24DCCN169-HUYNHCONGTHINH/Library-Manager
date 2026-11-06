@@ -1,0 +1,25 @@
+{
+	admin off
+	skip_install_trust
+	auto_https disable_redirects
+	storage file_system {
+		root {$LIBRARY_CADDY_DATA}
+	}
+}
+
+https://localhost:9443 {
+	bind 127.0.0.1
+	tls internal
+	handle_path /static/* {
+		root * {$LIBRARY_STATIC_ROOT}
+		file_server
+	}
+	handle {
+		reverse_proxy 127.0.0.1:9080
+	}
+}
+
+https://:9443 {
+	bind 127.0.0.1
+	respond "Unknown host" 421
+}

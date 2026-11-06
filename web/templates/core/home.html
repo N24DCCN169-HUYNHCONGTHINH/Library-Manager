@@ -1,16 +1,1 @@
-{% extends "base.html" %}
-{% block title %}Bắt đầu · Quản lý thư viện{% endblock %}
-{% block content %}
-<section class="card">
-  <h1>Dự án web quản lý thư viện</h1>
-  {% if user.is_authenticated %}
-    <p>Xin chào {{ user.get_username }}.</p>
-    {% if library_roles.librarian %}<p><a href="{% url 'staff_dashboard' %}">Mở khu vực nhân viên</a>{% if user.is_staff %} · <a href="/admin/">Quản trị</a>{% endif %}</p>
-    {% elif library_roles.reader %}<p><a href="{% url 'reader_portal' %}">Mở cổng độc giả</a></p>{% else %}<p>Tài khoản chưa được gán vai trò. Hãy liên hệ quản trị viên.</p>{% endif %}
-  {% else %}
-    <p>Đăng nhập bằng tài khoản được thư viện cấp để sử dụng hệ thống.</p>
-    <p><a href="{% url 'login' %}">Đăng nhập</a></p>
-  {% endif %}
-  <p>Trạng thái ứng dụng: <a href="{% url 'health' %}">kiểm tra health</a></p>
-</section>
-{% endblock %}
+{% extends "base.html" %}{% block title %}Trang chủ · Library Hub{% endblock %}{% block content %}<div class="page-intro"><div><div class="eyebrow">CHÀO MỪNG ĐẾN THƯ VIỆN</div><h1>Tri thức trong tầm tay.</h1><p class="muted">Khám phá sách, kết nối và quản lý hành trình đọc của bạn.</p></div></div><section class="card hero"><div class="eyebrow text-white">LIBRARY HUB</div><h1>Mỗi cuốn sách mở ra<br>một thế giới mới.</h1><p>Tra cứu danh mục, tìm vị trí bản sách và theo dõi các dịch vụ thư viện trong cùng một không gian.</p><a class="btn btn-light" href="{% url 'library:catalog' %}">Khám phá danh mục →</a>{% if library_roles.librarian %}<a class="btn btn-outline-light" href="{% url 'staff_dashboard' %}">Khu vực nhân viên</a>{% elif library_roles.reader %}<a class="btn btn-outline-light" href="{% url 'reader_portal' %}">Cổng độc giả</a>{% else %}<a class="btn btn-outline-light" href="{% url 'login' %}">Đăng nhập tài khoản</a>{% endif %}</section><div class="quick-grid"><a class="card quick-card" href="{% url 'library:catalog' %}"><span class="quick-icon">⌕</span><strong>Khám phá kho sách</strong><span class="muted">Tìm theo nhan đề, tác giả, ISBN hoặc cơ sở.</span></a>{% if library_roles.librarian %}<a class="card quick-card" href="{% url 'staff_dashboard' %}"><span class="quick-icon">◫</span><strong>Không gian nhân viên</strong><span class="muted">Truy cập các nghiệp vụ theo quyền được cấp.</span></a>{% else %}<a class="card quick-card" href="{% url 'reader_portal' %}"><span class="quick-icon">▣</span><strong>Thư viện của bạn</strong><span class="muted">Sách đang mượn, lịch sử và yêu cầu đặt trước.</span></a>{% endif %}<div class="card quick-card"><span class="quick-icon">◷</span><strong>Hỗ trợ tại quầy</strong><span class="muted">Liên hệ nhân viên để được cấp tài khoản và xác minh thẻ.</span></div></div>{% endblock %}

@@ -1,0 +1,10 @@
+{% extends "base.html" %}
+{% block title %}{% if book %}Sửa sách{% else %}Thêm sách{% endif %} · Library Hub{% endblock %}
+{% block content %}
+<section class="card form-card">
+  <h1>{% if book %}Sửa sách{% else %}Thêm sách{% endif %}</h1>
+  <p>Tài liệu quý/hiếm, báo/tạp chí và luận văn chỉ được đọc tại chỗ. ISBN có thể để trống.</p>
+  <form method="post">{% csrf_token %}{{ form.as_p }}<button type="submit">Lưu sách</button></form>
+  <a href="{% url 'library:book_list' %}">Quay lại danh sách</a>
+</section>
+{% endblock %}

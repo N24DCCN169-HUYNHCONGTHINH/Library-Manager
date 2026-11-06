@@ -1,0 +1,15 @@
+{% extends "base.html" %}
+{% block title %}Chi tiết lượt mượn · Thư viện{% endblock %}
+{% block content %}
+<section class="card">
+  <h1>{{ loan.copy.book.title }}</h1>
+  <p>Lượt #{{ loan.pk }} · Bản {{ loan.copy.barcode }} · {{ loan.get_status_display }}</p>
+  <p>Mượn: {{ loan.loaned_at|date:"d/m/Y H:i" }} · Hạn trả: {{ loan.due_at|date:"d/m/Y H:i" }}{% if loan.returned_at %} · Đã trả: {{ loan.returned_at|date:"d/m/Y H:i" }}{% endif %}</p>
+  <h2>Lịch sử gia hạn</h2>
+  {% for renewal in renewals %}<p>{{ renewal.renewed_at|date:"d/m/Y H:i" }} · Hạn cũ {{ renewal.old_due_at|date:"d/m/Y H:i" }} → hạn mới {{ renewal.new_due_at|date:"d/m/Y H:i" }}</p>{% empty %}<p>Chưa gia hạn.</p>{% endfor %}
+  <h2>Khoản phạt và biên nhận</h2>
+  {% if fine %}<p>Đã ghi nhận {{ fine.accrued_amount }} ₫ · Còn phải trả {{ fine.balance }} ₫ · {{ fine.get_status_display }} · Tính đến {{ fine.calculated_at|date:"d/m/Y H:i" }}</p>{% else %}<p>Chưa ghi nhận khoản phạt.</p>{% endif %}
+  {% for payment in payments %}<p>{{ payment.created_at|date:"d/m/Y H:i" }} · {{ payment.get_kind_display }} · {{ payment.amount }} ₫ · Biên nhận {{ payment.receipt_number }}</p>{% endfor %}
+  <p><a href="{% url 'reader_portal' %}">Về cổng độc giả</a></p>
+</section>
+{% endblock %}

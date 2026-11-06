@@ -1,0 +1,8 @@
+{
+  "books": {
+    "OLD-1": {
+      "material_type": "general",
+      "loan_mode": "home_loan"
+    }
+  }
+}

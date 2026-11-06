@@ -136,3 +136,40 @@ python manage.py refresh_overdue_loans
 Lệnh cấu hình khởi tạo hạn mức sinh viên 5 tài liệu/14 ngày; giảng viên và nhân viên 10 tài liệu/30 ngày; một lần gia hạn 7 ngày; phạt quá hạn 1.000 đồng/ngày, trần 30.000 đồng. Báo/tạp chí, tài liệu quý/hiếm và luận văn/luận án bị đặt mặc định chỉ đọc tại chỗ; có thể sửa chính sách và chế độ lưu thông tại Admin theo quy định đã duyệt. Lệnh không tự đặt lịch mở cửa. Cần cấu hình `Library hours` và ngày nghỉ lễ/đóng cửa theo lịch thực tế để hạn trả và phạt tự lùi/tính đúng. Lập lịch `expire_reservations` mỗi 15 phút để xử lý hàng chờ, và `refresh_overdue_loans` mỗi ngày để cập nhật phạt đang phát sinh và chuyển trạng thái thẻ khi quá hạn đủ 7 ngày. Trang cổng bạn đọc cũng cập nhật phạt cho các lượt của chính bạn đọc đó.
 
 Không nhập dữ liệu bạn đọc thật vào môi trường phát triển. Các giao dịch mượn/trả lưu người thao tác và lịch sử; tồn kho được quyết định từ từng bản sách có mã vạch, không dùng bộ đếm tồn kho trên đầu sách.
+# Tiến độ ngày 3
+
+Đã bổ sung danh sách, tìm kiếm, thêm/sửa sách tại `/library/staff/books/`, có MFA và kiểm tra quyền. Xem [biên bản ngày 3](docs/ngay-3-nghiem-thu.md) để chạy kịch bản nghiệm thu và xem phần việc ngày 4.
+
+## Tiến độ ngày 4
+
+Đã bổ sung danh sách, tìm kiếm, lọc trạng thái, thêm độc giả qua lời mời và sửa hồ sơ tại `/staff/readers/`. Tài khoản quản lý dùng liên kết “Quản lý độc giả” sau khi đăng nhập và xác minh MFA. Xem [biên bản ngày 4](docs/ngay-4-nghiem-thu.md) để biết quyền, kết quả kiểm thử và cách chạy thử theo cấu hình email hiện có.
+
+## Tiến độ ngày 5–7
+
+Đã hoàn thiện các luồng mượn, trả, gia hạn, đặt trước và chống cấp trùng tại `/library/staff/circulation/`. Xem [biên bản ngày 5–7](docs/ngay-5-7-nghiem-thu.md) để biết kết quả kiểm thử, giới hạn hiện tại, chuẩn bị bản sách vật lý và chạy thử hàng chờ. Migration `library.0004_circulation_safety` đã áp trên DB phát triển dùng chung; checkout SQLite riêng cần chạy `manage.py migrate` với đúng cấu hình SQLite trước khi dùng. Các lệnh hết hạn/nhắc giữ chỗ chưa được lập lịch tự động.
+
+## Tiến độ ngày 8
+
+Cổng độc giả `/reader/` đã có tổng quan, lịch sử mượn/yêu cầu/khoản phạt phân trang và chi tiết lượt cùng biên nhận. Mọi dữ liệu giới hạn theo tài khoản đang đăng nhập; các thao tác gia hạn/hủy chỉ nhận POST và kiểm tra chủ sở hữu. Xem [biên bản ngày 8](docs/ngay-8-nghiem-thu.md) để biết bằng chứng kiểm thử và cách nghiệm thu. Không cần migration mới cho ngày 8.
+
+## Tiến độ ngày 9
+
+Lệnh `migrate_legacy_sqlite` tạo snapshot nguồn chỉ đọc, báo cáo HTML/JSON, phân loại bản ghi lỗi/chờ xử lý và tổng đối soát. Có nhập thử đầu sách đã ánh xạ vào SQLite cục bộ; không tự chuyển hồ sơ, lượt mượn hoặc khoản thu thiếu căn cứ vào dữ liệu đang hoạt động. Xem [biên bản ngày 9](docs/ngay-9-nghiem-thu.md) để xem kết quả trên nguồn hiện tại, cách chạy lại và các điều kiện trước chuyển chính thức.
+
+## Bộ dữ liệu mới TP.HCM
+
+Đã có danh mục chọn lọc 6 thư viện thực tế có URL nguồn và bộ chạy thử riêng HCM-SYNTHETIC-V1 gồm 60 đầu sách, 180 bản vật lý, 36 độc giả và các giao dịch mô phỏng. Dữ liệu demo đã thêm vào môi trường phát triển, có mã DEMO-HCM; không xóa dữ liệu cũ hoặc coi các thư viện thật là chi nhánh chung. Xem [hướng dẫn bộ dữ liệu TP.HCM](docs/bo-du-lieu-tphcm.md) để xem nguồn, tài khoản và cách thử.
+
+## Tiến độ ngày 10
+
+Đã diễn tập sao lưu/khôi phục dữ liệu ứng dụng từ PostgreSQL sang SQLite riêng và dựng HTTPS nội bộ bằng Waitress + Caddy tại `https://localhost:9443/`, DEBUG=False, không gửi email ngoài và không cài CA vào Windows. Có cấu hình cho máy chủ tương lai và script bảo trì; chưa triển khai Internet hoặc đăng ký lịch Windows tự động. Xem [ngày 10: sao lưu, khôi phục và HTTPS](docs/ngay-10-nghiem-thu.md) trước khi dùng các lệnh vận hành.
+
+## Tiến độ ngày 11
+
+Đã chạy 114 kiểm thử và sửa lỗi thu tiền gửi lại, giữ chỗ hết hạn bị rollback, đặt trước/gia hạn trái chính sách, dữ liệu tiền không hợp lệ và kiểm tra tài khoản/hồ sơ tại service. Migration `library.0005_payment_idempotency` đã áp cho DB phát triển và bản khôi phục riêng. Đã kiểm tra lại PostgreSQL, backup/restore và HTTPS nội bộ; xem [biên bản ngày 11](docs/ngay-11-nghiem-thu.md) để biết bằng chứng và giới hạn chưa nghiệm thu.
+
+Bổ sung QA: đã chạy bộ 118 kiểm thử trên nhánh Neon riêng, PostgreSQL đạt 116 ca và bỏ qua 2 ca chỉ áp dụng SQLite; đủ 8/8 kịch bản đồng thời đạt. SQLite đạt 118/118. DB kiểm thử được tạo/xóa riêng, dữ liệu gốc QA không đổi. Xem [cách chạy và bằng chứng PostgreSQL QA](docs/kiem-thu-postgresql-qa.md).
+
+## Nghiệm thu và bàn giao bản nội bộ
+
+Đã tiếp tục kiểm tra giao diện, sửa thông báo tiếng Việt/nhãn biểu mẫu/bố cục, bổ sung kiểm thử hành trình liên tục. SQLite đạt 120 kiểm thử; hai ca mới chạy riêng PostgreSQL QA đạt. Xem [bàn giao ngày 12 và chuẩn bị ngày 13](docs/ngay-12-13-ban-giao-noi-bo.md) để phân biệt phần đã xác minh và các điều kiện còn thiếu trước triển khai thật.

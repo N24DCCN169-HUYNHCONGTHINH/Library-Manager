@@ -1,0 +1,12 @@
+{
+  "verified_on": "2026-11-06",
+  "scope": "Danh mục chọn lọc 6 thư viện tại TP.HCM, không phải toàn bộ thư viện thành phố. Dịch vụ ghi nhận từ trang công khai, không xác nhận tồn kho hoặc tài khoản nội bộ.",
+  "libraries": [
+    {"id": "GSL", "name": "Thư viện Khoa học Tổng hợp TP.HCM", "type": "Công cộng", "address": "69 Lý Tự Trọng, Phường Bến Thành, TP.HCM", "website": "https://thuvientphcm.gov.vn/", "services": ["Tra cứu trực tuyến", "Đọc tại chỗ", "Mượn về"], "sources": ["https://thuvientphcm.gov.vn/gioi-thieu", "https://thuvientphcm.gov.vn/nhung-cau-hoi-thuong-gap1"]},
+    {"id": "VNU", "name": "Thư viện Trung tâm ĐHQG-HCM", "type": "Đại học", "address": null, "address_note": "Chưa xác minh địa chỉ hiện hành; trang chính có thông báo địa chỉ trụ sở, cần kiểm tra trước khi đến.", "website": "https://vnulib.edu.vn/", "services": [], "sources": ["https://vnulib.edu.vn/"]},
+    {"id": "HCMUT", "name": "Thư viện Trường Đại học Bách khoa, ĐHQG-HCM", "type": "Đại học", "address": null, "address_note": "Chưa xác minh địa chỉ từng cơ sở phục vụ trong bộ dữ liệu này.", "website": "https://lib.hcmut.edu.vn/", "services": ["Mượn về", "Gia hạn", "Đặt mượn"], "sources": ["https://lib.hcmut.edu.vn/tien-ich?tab=dang-ky", "https://lib.hcmut.edu.vn/nguon-tai-lieu?tab=tai-lieu-truyen-thong"]},
+    {"id": "USSH", "name": "Trung tâm Thông tin, Thư viện và Bảo tàng — Trường ĐH KHXH&NV, ĐHQG-HCM", "type": "Đại học", "address": "10–12 Đinh Tiên Hoàng, Phường Sài Gòn, TP.HCM (cơ sở Sài Gòn)", "website": "https://hcmussh.edu.vn/cilm/home", "services": ["Đọc tại chỗ", "Mượn về", "Trả ngoài giờ", "Mượn liên thư viện"], "sources": ["https://hcmussh.edu.vn/cilm/home", "https://hcmussh.edu.vn/post/42908"]},
+    {"id": "HCMUE", "name": "Thư viện Trường Đại học Sư phạm TP.HCM", "type": "Đại học", "address": "280 An Dương Vương, Phường Chợ Quán, TP.HCM", "website": "https://thuvien.hcmue.edu.vn/", "services": ["Đọc tại chỗ", "Mượn về", "Tra cứu trực tuyến"], "sources": ["https://thuvien.hcmue.edu.vn/node/81", "https://thuvien.hcmue.edu.vn/sites/default/files/Cam%20nang%20huong%20dan%20su%20dung%20thu%20vien%202025%20-%202026%20final_0.pdf"]},
+    {"id": "FTU", "name": "Thư viện Phân hiệu Trường Đại học Ngoại thương tại TP.HCM", "type": "Đại học", "address": "Nhà A, tầng 3, phòng A301, A304; 15 Đường D5, Phường Thạnh Mỹ Tây, TP.HCM", "website": "https://hcmc.ftu.edu.vn/thu-vien/", "services": ["Tra cứu OPAC", "Tài liệu số", "Sách điện tử", "Học liệu theo môn học"], "sources": ["https://hcmc.ftu.edu.vn/thu-vien/"]}
+  ]
+}

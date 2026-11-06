@@ -60,6 +60,7 @@ def issue_account_invitation(*, actor, request, username, email, first_name="", 
         is_staff=role != "reader",
     )
     user.set_unusable_password()
+    user.full_clean(exclude=["password"])
     user.save()
     security, _ = AccountSecurity.objects.get_or_create(user=user)
     security.must_change_password = False
@@ -69,7 +70,7 @@ def issue_account_invitation(*, actor, request, username, email, first_name="", 
     user.groups.add(group)
 
     if role == "reader":
-        ReaderProfile.objects.create(
+        profile = ReaderProfile(
             user=user,
             reader_number=reader_number,
             reader_type=reader_type,
@@ -77,6 +78,8 @@ def issue_account_invitation(*, actor, request, username, email, first_name="", 
             valid_until=valid_until,
             membership_verified=False,
         )
+        profile.full_clean()
+        profile.save()
 
     raw_token = secrets.token_urlsafe(36)
     invitation = AccountInvitation.objects.create(

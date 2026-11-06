@@ -3,3 +3,6 @@ node_modules/
 work/
 .env
 .env.local
+*.db
+*.sqlite3
+backups/

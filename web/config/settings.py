@@ -155,6 +155,7 @@ USE_TZ = True
 
 STATIC_URL = "static/"
 STATIC_ROOT = BASE_DIR / "staticfiles"
+STATICFILES_DIRS = [BASE_DIR / "static"]
 MEDIA_URL = "media/"
 MEDIA_ROOT = BASE_DIR / "media"
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
@@ -174,7 +175,7 @@ EMAIL_HOST_USER = os.getenv("EMAIL_HOST_USER", "")
 EMAIL_HOST_PASSWORD = os.getenv("EMAIL_HOST_PASSWORD", "")
 EMAIL_USE_TLS = os.getenv("EMAIL_USE_TLS", "True").lower() in {"1", "true", "yes"}
 DEFAULT_FROM_EMAIL = os.getenv("DEFAULT_FROM_EMAIL", "no-reply@library.local")
-if not DEBUG and (not EMAIL_HOST or DEFAULT_FROM_EMAIL.endswith(".local")):
+if not DEBUG and ((EMAIL_BACKEND == "django.core.mail.backends.smtp.EmailBackend" and not EMAIL_HOST) or ".local" in DEFAULT_FROM_EMAIL):
     raise ImproperlyConfigured("Configure a real EMAIL_HOST and DEFAULT_FROM_EMAIL outside debug mode.")
 PASSWORD_RESET_TIMEOUT = 60 * 60
 SESSION_COOKIE_AGE = int(os.getenv("DJANGO_SESSION_AGE", "28800"))

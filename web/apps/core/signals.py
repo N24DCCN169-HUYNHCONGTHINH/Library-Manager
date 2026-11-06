@@ -8,6 +8,8 @@ from .models import AccountSecurity, AccountSecurityEvent
 
 @receiver(pre_save, sender=settings.AUTH_USER_MODEL)
 def remember_user_email(sender, instance, **kwargs):
+    if kwargs.get("raw"):
+        return
     if instance.pk:
         instance._security_previous_email = sender._default_manager.filter(pk=instance.pk).values_list("email", flat=True).first()
     else:
@@ -16,6 +18,8 @@ def remember_user_email(sender, instance, **kwargs):
 
 @receiver(post_save, sender=settings.AUTH_USER_MODEL)
 def create_account_security_profile(sender, instance, created, **kwargs):
+    if kwargs.get("raw"):
+        return
     if created:
         AccountSecurity.objects.get_or_create(user=instance)
         return

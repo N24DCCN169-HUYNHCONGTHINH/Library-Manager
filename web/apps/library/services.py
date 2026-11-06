@@ -1,8 +1,10 @@
 from datetime import datetime, time, timedelta
-from decimal import Decimal
+from decimal import Decimal, InvalidOperation
+from functools import wraps
 from uuid import uuid4
+from time import sleep
 
-from django.db import transaction
+from django.db import OperationalError, connection, transaction
 from django.db.models import Q
 from django.utils import timezone
 
@@ -10,6 +12,7 @@ from apps.core.models import ReaderProfile
 from .models import (
     Book, BookCopy, CirculationPolicy, DamageCase, Fine, FinePayment, Loan, LoanEvent,
     LoanRenewal, LibraryClosure, LibraryHours, ReaderRestriction, Reservation,
+    CirculationMutex, ReservationNotification,
 )
 
 
@@ -17,8 +20,32 @@ class CirculationError(Exception):
     """A circulation rule prevents this transaction."""
 
 
+def circulation_write(func):
+    """Serialize short circulation transactions across workers, including on SQLite.
+
+    Always take this lock before entity locks. A no-op UPDATE acquires a real
+    write lock; select_for_update alone provides no protection on SQLite.
+    """
+    @wraps(func)
+    def wrapped(*args, **kwargs):
+        for attempt in range(10):
+            try:
+                with transaction.atomic():
+                    if not CirculationMutex.objects.filter(pk=1).update(id=1):
+                        CirculationMutex.objects.get_or_create(pk=1)
+                        CirculationMutex.objects.filter(pk=1).update(id=1)
+                    return func(*args, **kwargs)
+            except OperationalError as exc:
+                if connection.vendor != "sqlite" or "locked" not in str(exc).lower():
+                    raise
+                if attempt == 9:
+                    raise CirculationError("Đang có giao dịch khác. Vui lòng thử lại sau ít giây.") from exc
+                sleep(0.025 * (attempt + 1))
+    return wrapped
+
+
 def _require_permission(actor, permission):
-    if not actor or not actor.is_authenticated or not (actor.is_superuser or actor.has_perm(f"library.{permission}")):
+    if not actor or not actor.is_authenticated or not actor.is_active or not (actor.is_superuser or actor.has_perm(f"library.{permission}")):
         raise CirculationError("Tài khoản không được cấp quyền thực hiện nghiệp vụ này.")
 
 
@@ -42,9 +69,14 @@ def _hold_expiry(started_at):
     local_expiry = timezone.localtime(expiry)
     closure = LibraryClosure.objects.filter(date=local_expiry.date(), is_full_day=True).exists()
     hours = LibraryHours.objects.filter(weekday=local_expiry.weekday()).first()
-    outside_hours = hours and (not hours.is_open or local_expiry.time().replace(tzinfo=None) < hours.opens_at or local_expiry.time().replace(tzinfo=None) >= hours.closes_at)
+    local_time = local_expiry.time().replace(tzinfo=None)
+    outside_hours = hours and (not hours.is_open or not hours.opens_at or not hours.closes_at
+                              or local_time < hours.opens_at or local_time >= hours.closes_at)
     if closure or outside_hours:
-        next_day = _next_service_day(local_expiry.date() + timedelta(days=1))
+        # Before opening on an otherwise open day, the next service is today.
+        before_opening = (hours and hours.is_open and hours.opens_at and hours.closes_at
+                          and local_time < hours.opens_at and not closure)
+        next_day = _next_service_day(local_expiry.date() if before_opening else local_expiry.date() + timedelta(days=1))
         next_hours = LibraryHours.objects.filter(weekday=next_day.weekday(), is_open=True).first()
         if next_hours:
             expiry = timezone.make_aware(datetime.combine(next_day, next_hours.closes_at), timezone.get_current_timezone())
@@ -70,15 +102,13 @@ def _assert_eligible(reader, policy=None):
         raise CirculationError("Tài khoản hoặc thẻ bạn đọc chưa hoạt động, chưa xác minh hoặc đã hết hạn.")
     if reader.restrictions.filter(resolved_at__isnull=True).exists():
         raise CirculationError("Hồ sơ đang bị hạn chế giao dịch; vui lòng liên hệ thư viện.")
-    open_loans = Loan.objects.filter(reader=reader, status=Loan.Status.OPEN).select_related("fine")
+    for fine in Fine.objects.filter(loan__reader=reader):
+        if fine.balance > 0:
+            raise CirculationError("Bạn còn khoản phạt chưa thanh toán.")
+    open_loans = Loan.objects.filter(reader=reader, status=Loan.Status.OPEN)
     for loan in open_loans:
         if loan.due_at < timezone.now():
             raise CirculationError("Bạn đang có tài liệu quá hạn; cần trả tài liệu trước khi mượn tiếp.")
-        try:
-            if loan.fine.balance > 0:
-                raise CirculationError("Bạn còn khoản phạt chưa thanh toán.")
-        except Fine.DoesNotExist:
-            pass
     if policy and open_loans.count() >= policy.max_active_loans:
         raise CirculationError(f"Đã đạt hạn mức {policy.max_active_loans} tài liệu đang mượn.")
 
@@ -87,8 +117,16 @@ def _event(loan, event_type, actor, reason="", details=None):
     LoanEvent.objects.create(loan=loan, event_type=event_type, actor=actor, reason=reason, details=details or {})
 
 
-@transaction.atomic
 def checkout_copy(reader_number, barcode, actor, idempotency_key=None):
+    _require_permission(actor, "checkout_loan")
+    # Housekeeping commits independently; rejecting a pickup must not resurrect
+    # an expired hold or roll back allocation to the next reader.
+    expire_ready_reservations()
+    return _checkout_copy(reader_number, barcode, actor, idempotency_key)
+
+
+@circulation_write
+def _checkout_copy(reader_number, barcode, actor, idempotency_key=None):
     _require_permission(actor, "checkout_loan")
     reader = ReaderProfile.objects.select_for_update().select_related("user").get(reader_number=reader_number)
     copy = BookCopy.objects.select_for_update().select_related("book").get(barcode=barcode)
@@ -96,7 +134,10 @@ def checkout_copy(reader_number, barcode, actor, idempotency_key=None):
     if idempotency_key:
         existing = Loan.objects.filter(idempotency_key=idempotency_key).first()
         if existing:
+            if existing.reader_id != reader.pk or existing.copy_id != copy.pk or existing.created_by_id != actor.pk:
+                raise CirculationError("Mã thao tác đã được sử dụng cho một giao dịch khác.")
             return existing
+    copy.refresh_from_db()
     if not copy.is_active or not copy.book.is_active or copy.status not in {BookCopy.Status.AVAILABLE, BookCopy.Status.ON_HOLD}:
         raise CirculationError("Bản sách không sẵn sàng để cho mượn.")
     if not copy.allows_home_loan:
@@ -122,6 +163,7 @@ def checkout_copy(reader_number, barcode, actor, idempotency_key=None):
         material_type_snapshot=copy.book.material_type, policy_version_snapshot=policy.version,
         max_loans_snapshot=policy.max_active_loans, overdue_rate_snapshot=policy.overdue_rate_per_day,
         overdue_cap_snapshot=policy.overdue_fine_cap, loaned_at=now, due_at=_due_at(now, policy.loan_days),
+        max_renewals_snapshot=policy.max_renewals, renewal_days_snapshot=policy.renewal_days,
         idempotency_key=idempotency_key, created_by=actor,
     )
     copy.status = BookCopy.Status.ON_LOAN
@@ -153,6 +195,7 @@ def _accrue_fine(loan, returned_at):
     return fine
 
 
+@circulation_write
 def refresh_overdue_loans(reader=None):
     now = timezone.now()
     loans = Loan.objects.filter(status=Loan.Status.OPEN, due_at__lt=now).select_related("reader__user", "copy__book")
@@ -174,17 +217,41 @@ def refresh_overdue_loans(reader=None):
     return refreshed
 
 
-@transaction.atomic
-def record_fine_payment(fine_id, amount, actor, kind=FinePayment.Kind.PAYMENT, approved_by=None, reason=""):
+def _money(value, max_digits=10, allow_zero=False):
+    try:
+        if isinstance(value, bool):
+            raise ValueError()
+        amount = Decimal(value)
+        if not amount.is_finite() or amount != amount.to_integral_value() or amount < 0 or amount >= 10 ** max_digits:
+            raise ValueError()
+        if not allow_zero and amount == 0:
+            raise ValueError()
+        return amount
+    except (InvalidOperation, ValueError, TypeError) as exc:
+        raise CirculationError("Số tiền VND phải là số nguyên hợp lệ trong giới hạn cho phép.") from exc
+
+
+@circulation_write
+def record_fine_payment(fine_id, amount, actor, kind=FinePayment.Kind.PAYMENT, approved_by=None, reason="", idempotency_key=None):
     _require_permission(actor, "collect_finepayment")
     fine = Fine.objects.select_for_update().get(pk=fine_id)
-    amount = Decimal(amount)
+    amount = _money(amount)
+    if idempotency_key:
+        existing = FinePayment.objects.filter(idempotency_key=idempotency_key).first()
+        if existing:
+            if (existing.fine_id != fine.pk or existing.amount != amount or existing.created_by_id != actor.pk
+                or existing.kind != kind or existing.approved_by_id != getattr(approved_by, "pk", None)
+                or existing.reason != reason[:500]):
+                raise CirculationError("Mã thao tác đã được sử dụng cho một giao dịch khác.")
+            return existing
     if kind not in {FinePayment.Kind.PAYMENT, FinePayment.Kind.WAIVER}:
         raise CirculationError("Loại điều chỉnh này cần luồng phê duyệt riêng.")
     if amount <= 0 or amount > fine.balance:
         raise CirculationError("Số tiền phải lớn hơn 0 và không vượt số dư còn phải trả.")
     if kind == FinePayment.Kind.WAIVER and not approved_by:
         raise CirculationError("Miễn/giảm khoản phạt cần người quản lý phê duyệt.")
+    if kind == FinePayment.Kind.WAIVER and not reason.strip():
+        raise CirculationError("Miễn/giảm khoản phạt cần ghi lý do.")
     if kind == FinePayment.Kind.WAIVER:
         _require_permission(approved_by, "approve_finepayment")
         if approved_by.pk == actor.pk:
@@ -192,6 +259,7 @@ def record_fine_payment(fine_id, amount, actor, kind=FinePayment.Kind.PAYMENT, a
     transaction_row = FinePayment.objects.create(
         fine=fine, kind=kind, amount=amount, receipt_number=f"PT-{uuid4().hex[:12].upper()}",
         reason=reason[:500], created_by=actor, approved_by=approved_by,
+        idempotency_key=idempotency_key,
     )
     if fine.balance == 0:
         fine.status = Fine.Status.WAIVED if kind == FinePayment.Kind.WAIVER else Fine.Status.PAID
@@ -201,7 +269,7 @@ def record_fine_payment(fine_id, amount, actor, kind=FinePayment.Kind.PAYMENT, a
     return transaction_row
 
 
-@transaction.atomic
+@circulation_write
 def resolve_reader_restriction(restriction_id, actor, resolution):
     _require_permission(actor, "manage_reader_restrictions")
     restriction = ReaderRestriction.objects.select_for_update().get(pk=restriction_id, resolved_at__isnull=True)
@@ -212,14 +280,14 @@ def resolve_reader_restriction(restriction_id, actor, resolution):
     return restriction
 
 
-@transaction.atomic
+@circulation_write
 def approve_damage_case(case_id, actor, replacement_amount, processing_fee, reason):
     _require_permission(actor, "approve_damagecase")
     case = DamageCase.objects.select_for_update().get(pk=case_id)
     if case.status not in {DamageCase.Status.OPEN, DamageCase.Status.CONTESTED}:
         raise CirculationError("Chỉ hồ sơ đang xác minh/khiếu nại mới được phê duyệt.")
-    replacement_amount = Decimal(replacement_amount)
-    processing_fee = Decimal(processing_fee)
+    replacement_amount = _money(replacement_amount, max_digits=12, allow_zero=True)
+    processing_fee = _money(processing_fee, allow_zero=True)
     if replacement_amount < 0 or processing_fee < 0 or not reason.strip():
         raise CirculationError("Cần số tiền không âm và lý do quyết định.")
     case.replacement_amount = replacement_amount
@@ -235,21 +303,28 @@ def approve_damage_case(case_id, actor, replacement_amount, processing_fee, reas
     return case
 
 
-@transaction.atomic
-def return_copy(barcode, actor, condition_note=""):
+@circulation_write
+def return_copy(barcode, actor, condition_note="", idempotency_key=None):
     _require_permission(actor, "return_loan")
     copy = BookCopy.objects.select_for_update().get(barcode=barcode)
     Book.objects.select_for_update().get(pk=copy.book_id)
+    if idempotency_key:
+        existing = Loan.objects.filter(return_idempotency_key=idempotency_key).first()
+        if existing:
+            if existing.copy_id != copy.pk or existing.returned_by_id != actor.pk:
+                raise CirculationError("Mã thao tác đã được sử dụng cho một giao dịch khác.")
+            return existing
     loan = Loan.objects.select_for_update().filter(copy=copy, status=Loan.Status.OPEN).first()
     if not loan:
-        if copy.status == BookCopy.Status.AVAILABLE:
+        if copy.status in {BookCopy.Status.AVAILABLE, BookCopy.Status.ON_HOLD, BookCopy.Status.RETURN_REVIEW}:
             return None
         raise CirculationError("Không tìm thấy lượt mượn đang mở cho bản sách này.")
     now = timezone.now()
     loan.status = Loan.Status.RETURNED
     loan.returned_at = now
     loan.returned_by = actor
-    loan.save(update_fields=["status", "returned_at", "returned_by"])
+    loan.return_idempotency_key = idempotency_key
+    loan.save(update_fields=["status", "returned_at", "returned_by", "return_idempotency_key"])
     _accrue_fine(loan, now)
     if condition_note:
         copy.status = BookCopy.Status.RETURN_REVIEW
@@ -267,15 +342,25 @@ def return_copy(barcode, actor, condition_note=""):
     return loan
 
 
-@transaction.atomic
-def renew_loan(loan_id, actor):
+@circulation_write
+def renew_loan(loan_id, actor, idempotency_key=None):
     loan = Loan.objects.select_for_update().select_related("reader__user", "copy__book", "policy").get(pk=loan_id)
     now = timezone.now()
     if loan.reader.user_id != getattr(actor, "pk", None):
         _require_permission(actor, "renew_loan")
+    if idempotency_key:
+        existing = LoanRenewal.objects.filter(idempotency_key=idempotency_key).first()
+        if existing:
+            if existing.loan_id != loan.pk or existing.renewed_by_id != actor.pk:
+                raise CirculationError("Mã thao tác đã được sử dụng cho một giao dịch khác.")
+            return loan
     if loan.status != Loan.Status.OPEN:
         raise CirculationError("Chỉ có thể gia hạn lượt mượn đang mở.")
-    if loan.renewal_count >= loan.policy.max_renewals:
+    if (loan.copy.status != BookCopy.Status.ON_LOAN or not loan.copy.is_active
+        or not loan.copy.book.is_active or not loan.copy.allows_home_loan
+        or not _policy(loan.reader, loan.copy, timezone.localdate()).allow_home_loan):
+        raise CirculationError("Bản sách hoặc chính sách hiện tại không cho phép gia hạn.")
+    if loan.renewal_count >= loan.max_renewals_snapshot:
         raise CirculationError("Lượt mượn đã hết số lần gia hạn.")
     if loan.due_at - now > timedelta(hours=48) or loan.due_at < now:
         raise CirculationError("Chỉ được gia hạn trong 48 giờ cuối trước hạn trả.")
@@ -283,16 +368,17 @@ def renew_loan(loan_id, actor):
         raise CirculationError("Sách đã có người đặt trước, không thể gia hạn.")
     _assert_eligible(loan.reader)
     old_due = loan.due_at
-    new_due = _due_at(old_due, loan.policy.renewal_days)
+    new_due = _due_at(old_due, loan.renewal_days_snapshot)
     loan.due_at = new_due
     loan.renewal_count += 1
     loan.save(update_fields=["due_at", "renewal_count"])
-    LoanRenewal.objects.create(loan=loan, old_due_at=old_due, new_due_at=new_due, renewed_by=actor)
+    LoanRenewal.objects.create(loan=loan, old_due_at=old_due, new_due_at=new_due, renewed_by=actor,
+                               idempotency_key=idempotency_key)
     _event(loan, "renewal", actor, details={"old_due_at": old_due.isoformat(), "new_due_at": new_due.isoformat()})
     return loan
 
 
-@transaction.atomic
+@circulation_write
 def place_reservation(reader, book_id, actor):
     if reader.user_id != getattr(actor, "pk", None):
         raise CirculationError("Bạn chỉ được đặt trước bằng hồ sơ bạn đọc của chính mình.")
@@ -310,6 +396,8 @@ def place_reservation(reader, book_id, actor):
         raise CirculationError("Hiện không có bản sách mượn về nào đang lưu thông để đặt trước.")
     sample_copy = loanable_copies.first()
     policy = _policy(reader, sample_copy, timezone.localdate())
+    if not policy.allow_home_loan:
+        raise CirculationError("Chính sách hiện tại không cho đặt trước loại tài liệu này.")
     _assert_eligible(reader, policy)
     if loanable_copies.filter(status=BookCopy.Status.AVAILABLE).exists():
         raise CirculationError("Đang có bản sẵn sàng; hãy liên hệ quầy để mượn.")
@@ -318,13 +406,15 @@ def place_reservation(reader, book_id, actor):
     return Reservation.objects.create(reader=reader, book=book)
 
 
-@transaction.atomic
+@circulation_write
 def cancel_reservation(reader, reservation_id, actor):
     if reader.user_id != getattr(actor, "pk", None):
         raise CirculationError("Bạn chỉ được hủy yêu cầu đặt trước của chính mình.")
-    reservation = Reservation.objects.select_for_update().get(
-        pk=reservation_id, reader=reader, status__in=[Reservation.Status.WAITING, Reservation.Status.READY]
-    )
+    reservation = Reservation.objects.select_for_update().get(pk=reservation_id, reader=reader)
+    if reservation.status == Reservation.Status.CANCELLED:
+        return reservation
+    if reservation.status not in {Reservation.Status.WAITING, Reservation.Status.READY}:
+        raise CirculationError("Yêu cầu đặt trước đã kết thúc, không thể hủy.")
     Book.objects.select_for_update().get(pk=reservation.book_id)
     reservation.status = Reservation.Status.CANCELLED
     reservation.closed_at = timezone.now()
@@ -338,12 +428,18 @@ def cancel_reservation(reader, reservation_id, actor):
     return reservation
 
 
+@circulation_write
 def allocate_next_reservation(copy, actor):
+    copy = BookCopy.objects.select_for_update().select_related("book").get(pk=copy.pk)
+    if not copy.is_active or not copy.book.is_active or not copy.allows_home_loan or copy.status != BookCopy.Status.AVAILABLE:
+        return None
     now = timezone.now()
     queue = Reservation.objects.select_for_update().filter(book=copy.book, status=Reservation.Status.WAITING).select_related("reader__user").order_by("created_at", "pk")
     for reservation in queue:
         try:
             policy = _policy(reservation.reader, copy, timezone.localdate())
+            if not policy.allow_home_loan:
+                raise CirculationError("Chính sách hiện tại không cho mượn loại tài liệu này.")
             _assert_eligible(reservation.reader, policy)
         except CirculationError as exc:
             reservation.status = Reservation.Status.INELIGIBLE
@@ -358,16 +454,17 @@ def allocate_next_reservation(copy, actor):
         reservation.ready_at = now
         reservation.expires_at = _hold_expiry(now)
         reservation.save(update_fields=["status", "copy", "ready_at", "expires_at"])
+        ReservationNotification.objects.get_or_create(reservation=reservation)
         return reservation
     return None
 
 
-@transaction.atomic
+@circulation_write
 def expire_ready_reservations():
     now = timezone.now()
     expired = Reservation.objects.select_for_update().filter(
         status=Reservation.Status.READY, expires_at__lte=now
-    ).select_related("copy__book").order_by("expires_at")
+    ).order_by("expires_at", "pk")
     count = 0
     for reservation in expired:
         copy = BookCopy.objects.select_for_update().get(pk=reservation.copy_id)
