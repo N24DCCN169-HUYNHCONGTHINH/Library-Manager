@@ -1,3 +1,3 @@
 {% extends "base.html" %}
 {% block title %}Đổi email{% endblock %}
-{% block content %}<section class="card"><h1>Đổi email tài khoản</h1><p>Nhập email mới và mật khẩu hiện tại. Địa chỉ chỉ được cập nhật sau khi bạn xác nhận liên kết gửi tới email mới.</p><form method="post">{% csrf_token %}{{ form.as_p }}<button type="submit">Gửi liên kết xác nhận</button></form></section>{% endblock %}
+{% block content %}<section class="card"><h1>Đổi hoặc xác minh email</h1><p>Nhập email và mật khẩu hiện tại. Bạn có thể nhập lại địa chỉ đang dùng nếu email chưa được xác minh. Địa chỉ chỉ được xác minh sau khi bạn mở liên kết trong thư và xác nhận.</p><form method="post">{% csrf_token %}{{ form.as_p }}<button type="submit">Gửi liên kết xác nhận</button></form></section>{% endblock %}

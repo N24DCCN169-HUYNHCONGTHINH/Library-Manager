@@ -86,3 +86,29 @@ class Day11AccountJourneyTests(TestCase):
         self.assertEqual(len(mail.outbox), previous_count)
         self.user.refresh_from_db()
         self.assertEqual(self.user.email, "reader@example.invalid")
+
+    def test_verify_existing_unverified_email_requires_confirmation(self):
+        self.activate()
+        security = self.user.security_profile
+        security.email_verified_at = None
+        security.verified_email = ""
+        security.save()
+        count = len(mail.outbox)
+        response = self.client.post(reverse("email_change_request"),
+            {"email": self.user.email, "current_password": self.password})
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(len(mail.outbox), count + 1)
+        token = re.search(r"/accounts/email/confirm/([^/\s]+)/", mail.outbox[-1].body).group(1)
+        self.user.refresh_from_db()
+        self.assertFalse(self.user.security_profile.email_is_verified)
+        self.client.get(reverse("email_change_confirm", args=[token]))
+        self.user.refresh_from_db()
+        self.assertFalse(self.user.security_profile.email_is_verified)
+        self.client.post(reverse("email_change_confirm", args=[token]))
+        self.user.refresh_from_db()
+        self.assertTrue(self.user.security_profile.email_is_verified)
+        count = len(mail.outbox)
+        response = self.client.post(reverse("email_change_request"),
+            {"email": self.user.email, "current_password": self.password})
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(len(mail.outbox), count)

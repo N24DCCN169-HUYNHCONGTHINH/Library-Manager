@@ -71,7 +71,7 @@ class EmailChangeRequestForm(forms.Form):
         users = get_user_model().objects.filter(email__iexact=email).exclude(pk=self.user.pk)
         if users.exists():
             raise ValidationError("Email này đã gắn với một tài khoản khác.")
-        if email.casefold() == (self.user.email or "").casefold():
+        if email.casefold() == (self.user.email or "").casefold() and self.user.security_profile.email_is_verified:
             raise ValidationError("Email này hiện đang được dùng cho tài khoản của bạn.")
         return email
 

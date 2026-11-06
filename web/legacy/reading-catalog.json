@@ -1,0 +1,249 @@
+{
+  "notice": "Tên tác phẩm và tác giả có thật; bản sách, cơ sở và giao dịch trong ứng dụng là dữ liệu thử. Chưa xác định ISBN hoặc ấn bản cụ thể.",
+  "books": [
+    {
+      "title": "Dế Mèn phiêu lưu ký",
+      "authors": "Tô Hoài"
+    },
+    {
+      "title": "Tôi thấy hoa vàng trên cỏ xanh",
+      "authors": "Nguyễn Nhật Ánh"
+    },
+    {
+      "title": "Mắt biếc",
+      "authors": "Nguyễn Nhật Ánh"
+    },
+    {
+      "title": "Cho tôi xin một vé đi tuổi thơ",
+      "authors": "Nguyễn Nhật Ánh"
+    },
+    {
+      "title": "Tôi là Bê Tô",
+      "authors": "Nguyễn Nhật Ánh"
+    },
+    {
+      "title": "Cô gái đến từ hôm qua",
+      "authors": "Nguyễn Nhật Ánh"
+    },
+    {
+      "title": "Ngồi khóc trên cây",
+      "authors": "Nguyễn Nhật Ánh"
+    },
+    {
+      "title": "Có hai con mèo ngồi bên cửa sổ",
+      "authors": "Nguyễn Nhật Ánh"
+    },
+    {
+      "title": "Bảy bước tới mùa hè",
+      "authors": "Nguyễn Nhật Ánh"
+    },
+    {
+      "title": "Ngày xưa có một chuyện tình",
+      "authors": "Nguyễn Nhật Ánh"
+    },
+    {
+      "title": "Con chó nhỏ mang giỏ hoa hồng",
+      "authors": "Nguyễn Nhật Ánh"
+    },
+    {
+      "title": "Cây chuối non đi giày xanh",
+      "authors": "Nguyễn Nhật Ánh"
+    },
+    {
+      "title": "Làm bạn với bầu trời",
+      "authors": "Nguyễn Nhật Ánh"
+    },
+    {
+      "title": "Chú bé rắc rối",
+      "authors": "Nguyễn Nhật Ánh"
+    },
+    {
+      "title": "Bồ câu không đưa thư",
+      "authors": "Nguyễn Nhật Ánh"
+    },
+    {
+      "title": "Đất rừng phương Nam",
+      "authors": "Đoàn Giỏi"
+    },
+    {
+      "title": "Quê nội",
+      "authors": "Võ Quảng"
+    },
+    {
+      "title": "Tảng sáng",
+      "authors": "Võ Quảng"
+    },
+    {
+      "title": "Tuổi thơ dữ dội",
+      "authors": "Phùng Quán"
+    },
+    {
+      "title": "Góc sân và khoảng trời",
+      "authors": "Trần Đăng Khoa"
+    },
+    {
+      "title": "Tắt đèn",
+      "authors": "Ngô Tất Tố"
+    },
+    {
+      "title": "Số đỏ",
+      "authors": "Vũ Trọng Phụng"
+    },
+    {
+      "title": "Giông tố",
+      "authors": "Vũ Trọng Phụng"
+    },
+    {
+      "title": "Bước đường cùng",
+      "authors": "Nguyễn Công Hoan"
+    },
+    {
+      "title": "Bỉ vỏ",
+      "authors": "Nguyên Hồng"
+    },
+    {
+      "title": "Những ngày thơ ấu",
+      "authors": "Nguyên Hồng"
+    },
+    {
+      "title": "Sống mòn",
+      "authors": "Nam Cao"
+    },
+    {
+      "title": "Nỗi buồn chiến tranh",
+      "authors": "Bảo Ninh"
+    },
+    {
+      "title": "Thời xa vắng",
+      "authors": "Lê Lựu"
+    },
+    {
+      "title": "Cánh đồng bất tận",
+      "authors": "Nguyễn Ngọc Tư"
+    },
+    {
+      "title": "Hoàng tử bé",
+      "authors": "Antoine de Saint-Exupéry"
+    },
+    {
+      "title": "Nhà giả kim",
+      "authors": "Paulo Coelho"
+    },
+    {
+      "title": "Ông già và biển cả",
+      "authors": "Ernest Hemingway"
+    },
+    {
+      "title": "Chuông nguyện hồn ai",
+      "authors": "Ernest Hemingway"
+    },
+    {
+      "title": "Những người khốn khổ",
+      "authors": "Victor Hugo"
+    },
+    {
+      "title": "Nhà thờ Đức Bà Paris",
+      "authors": "Victor Hugo"
+    },
+    {
+      "title": "Ba chàng lính ngự lâm",
+      "authors": "Alexandre Dumas"
+    },
+    {
+      "title": "Bá tước Monte Cristo",
+      "authors": "Alexandre Dumas"
+    },
+    {
+      "title": "Hai vạn dặm dưới biển",
+      "authors": "Jules Verne"
+    },
+    {
+      "title": "Vòng quanh thế giới trong tám mươi ngày",
+      "authors": "Jules Verne"
+    },
+    {
+      "title": "Hành trình vào tâm Trái Đất",
+      "authors": "Jules Verne"
+    },
+    {
+      "title": "Đảo giấu vàng",
+      "authors": "Robert Louis Stevenson"
+    },
+    {
+      "title": "Robinson Crusoe",
+      "authors": "Daniel Defoe"
+    },
+    {
+      "title": "Những cuộc phiêu lưu của Tom Sawyer",
+      "authors": "Mark Twain"
+    },
+    {
+      "title": "Những cuộc phiêu lưu của Huckleberry Finn",
+      "authors": "Mark Twain"
+    },
+    {
+      "title": "Tiếng gọi nơi hoang dã",
+      "authors": "Jack London"
+    },
+    {
+      "title": "Nanh trắng",
+      "authors": "Jack London"
+    },
+    {
+      "title": "Không gia đình",
+      "authors": "Hector Malot"
+    },
+    {
+      "title": "Trong gia đình",
+      "authors": "Hector Malot"
+    },
+    {
+      "title": "Những tấm lòng cao cả",
+      "authors": "Edmondo De Amicis"
+    },
+    {
+      "title": "Khu vườn bí mật",
+      "authors": "Frances Hodgson Burnett"
+    },
+    {
+      "title": "Công chúa nhỏ",
+      "authors": "Frances Hodgson Burnett"
+    },
+    {
+      "title": "Anne tóc đỏ dưới chái nhà xanh",
+      "authors": "Lucy Maud Montgomery"
+    },
+    {
+      "title": "Kiêu hãnh và định kiến",
+      "authors": "Jane Austen"
+    },
+    {
+      "title": "Lý trí và tình cảm",
+      "authors": "Jane Austen"
+    },
+    {
+      "title": "Jane Eyre",
+      "authors": "Charlotte Brontë"
+    },
+    {
+      "title": "Đồi gió hú",
+      "authors": "Emily Brontë"
+    },
+    {
+      "title": "Tội ác và hình phạt",
+      "authors": "Fyodor Dostoevsky"
+    },
+    {
+      "title": "Chiến tranh và hòa bình",
+      "authors": "Lev Tolstoy"
+    },
+    {
+      "title": "Anna Karenina",
+      "authors": "Lev Tolstoy"
+    }
+  ],
+  "sample_sources": [
+    "https://nxbkimdong.com.vn/to-hoai",
+    "https://www.nxbtre.com.vn/en/book/toi-thay-hoa-vang-tren-co-xanh-44630.html"
+  ]
+}

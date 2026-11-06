@@ -166,7 +166,8 @@ def request_email_change(*, user, email, current_password, request):
         raise ValidationError("Mật khẩu hiện tại không đúng.")
     if get_user_model().objects.filter(email__iexact=email).exclude(pk=user.pk).exists():
         raise ValidationError("Email này đã gắn với tài khoản khác.")
-    if email.casefold() == (user.email or "").casefold():
+    same_email = email.casefold() == (user.email or "").casefold()
+    if same_email and user.security_profile.email_is_verified:
         raise ValidationError("Email này hiện đang được dùng cho tài khoản của bạn.")
     now = timezone.now()
     EmailChangeVerification.objects.select_for_update().filter(
@@ -188,7 +189,7 @@ def request_email_change(*, user, email, current_password, request):
     )
     if sent != 1:
         raise ValidationError("Không gửi được email xác nhận.")
-    if user.email:
+    if user.email and not same_email:
         _send_mail(
             "Yêu cầu đổi email tài khoản thư viện",
             "Có yêu cầu đổi email tài khoản của bạn. Nếu không phải bạn, hãy liên hệ thư viện và đổi mật khẩu ngay.",
