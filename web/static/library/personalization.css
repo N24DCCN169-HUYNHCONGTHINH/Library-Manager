@@ -10,3 +10,17 @@ html[data-bs-theme=dark] .badge.bg-teal-lt,html[data-bs-theme=dark] .badge.bg-gr
 .session-list{max-height:570px;overflow:auto;padding-right:8px}.session-list article{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:13px 0}.session-list .btn{flex-shrink:0}@media(max-width:760px){.session-list{max-height:400px}}
 
 .fine-entry{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:12px;margin-bottom:12px}.fine-entry .fine-summary-row{margin:0}@media(max-width:760px){.fine-entry{grid-template-columns:minmax(0,1fr)}}
+
+/* Authentication pages use the same theme as their forms and navigation. */
+html[data-bs-theme="light"] .account-shell .account-brand{color:#163a50}
+html[data-bs-theme="dark"] .account-shell .app-main{
+  background:radial-gradient(ellipse at 20% 30%,#203c36,transparent 60%),#14201f;
+}
+html[data-bs-theme="dark"] .account-shell .account-brand{color:#9de0cf}
+html[data-bs-theme="dark"] .account-shell .app-footer{color:#acc1b9}
+html[data-bs-theme="dark"] .account-shell .card{box-shadow:0 12px 36px #00000024}
+html[data-bs-theme="dark"] .account-shell input:-webkit-autofill{
+  -webkit-text-fill-color:#e2ece8;
+  -webkit-box-shadow:0 0 0 1000px #13211f inset;
+  caret-color:#e2ece8;
+}
