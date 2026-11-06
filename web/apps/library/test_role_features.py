@@ -162,3 +162,11 @@ class RoleFeatureTests(TestCase):
         self.assertEqual(self.client.post(reverse("operations"),{"name":"Library","notifications_enabled":"on","reminder_days":3,"login_failure_limit":99,"lockout_minutes":0,"session_minutes":999999,"reason":"test"}).status_code,200)
         from apps.core.models import SystemConfiguration
         config=SystemConfiguration.objects.get(pk=1);self.assertEqual(config.login_failure_limit,5);self.assertEqual(config.session_minutes,480)
+
+    def test_report_navigation_defaults_dates_without_required_field_errors(self):
+        self.login(self.cataloger)
+        response=self.client.get(reverse("library:reports"),{"kind":"inventory"})
+        self.assertEqual(response.status_code,200)
+        self.assertNotContains(response,"Trường này là bắt buộc")
+        self.assertEqual(response.context["row_count"],2)
+        self.assertContains(response,'value="'+timezone.localdate().isoformat()+'"')

@@ -15,8 +15,8 @@ from .models import Book, BookCopy, Loan, Fine, FinePayment
 REPORTS = {"inventory": ("Kho sách", "library.view_bookcopy"), "circulation": ("Mượn / trả", "library.view_loan"), "summary": ("Tổng hợp thư viện", "library.view_system_reports")}
 class ReportForm(forms.Form):
     kind = forms.ChoiceField(label="Loại báo cáo", choices=[])
-    start = forms.DateField(label="Từ ngày", widget=forms.DateInput(attrs={"type":"date"}))
-    end = forms.DateField(label="Đến ngày", widget=forms.DateInput(attrs={"type":"date"}))
+    start = forms.DateField(label="Từ ngày", widget=forms.DateInput(format="%Y-%m-%d",attrs={"type":"date"}))
+    end = forms.DateField(label="Đến ngày", widget=forms.DateInput(format="%Y-%m-%d",attrs={"type":"date"}))
     def __init__(self, *args, user, **kwargs):
         super().__init__(*args, **kwargs)
         self.fields["kind"].choices = [(key, label) for key,(label,perm) in REPORTS.items() if user.has_perm(perm)]
@@ -61,7 +61,8 @@ def reports(request):
     allowed=[key for key,(_,perm) in REPORTS.items() if request.user.has_perm(perm)]
     if not allowed: return HttpResponseForbidden("Bạn không có quyền xuất báo cáo nghiệp vụ.")
     today=timezone.localdate()
-    params=request.GET or {"kind":allowed[0],"start":today.replace(day=1),"end":today}
+    params={"kind":allowed[0],"start":today.replace(day=1),"end":today}
+    params.update(request.GET.dict())
     if params.get("kind") in REPORTS and not request.user.has_perm(REPORTS[params["kind"]][1]):
         return HttpResponseForbidden("Không được xuất loại báo cáo này.")
     form=ReportForm(params,user=request.user)

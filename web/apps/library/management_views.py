@@ -19,7 +19,7 @@ class CopyForm(forms.ModelForm):
         model=BookCopy
         fields=("barcode","branch","shelf_location","home_loan_override","condition_note","acquired_at","is_active")
         labels={"barcode":"Mã vạch bản sách","branch":"Cơ sở","shelf_location":"Vị trí kệ","home_loan_override":"Cho mượn về nhà (để trống: theo đầu sách)","condition_note":"Ghi chú tình trạng","acquired_at":"Ngày nhập kho","is_active":"Đang sử dụng"}
-        widgets={"acquired_at":forms.DateInput(attrs={"type":"date"})}
+        widgets={"acquired_at":forms.DateInput(format="%Y-%m-%d",attrs={"type":"date"})}
     def clean(self):
         data=super().clean()
         if self.instance.pk and self.instance.status not in {"available","retired","inventory_review"}:
@@ -77,7 +77,7 @@ class PolicyForm(forms.ModelForm):
     class Meta:
         model=CirculationPolicy
         fields=("reader_type","material_type","version","effective_from","effective_until","allow_home_loan","max_active_loans","loan_days","max_renewals","renewal_days","overdue_rate_per_day","overdue_fine_cap")
-        widgets={k:forms.DateInput(attrs={"type":"date"}) for k in ("effective_from","effective_until")}
+        widgets={k:forms.DateInput(format="%Y-%m-%d",attrs={"type":"date"}) for k in ("effective_from","effective_until")}
         labels={"reader_type":"Loại độc giả","material_type":"Loại tài liệu","version":"Phiên bản","effective_from":"Hiệu lực từ","effective_until":"Hiệu lực đến","allow_home_loan":"Cho mượn về nhà","max_active_loans":"Số sách tối đa","loan_days":"Số ngày mượn","max_renewals":"Số lần gia hạn","renewal_days":"Số ngày mỗi lần gia hạn","overdue_rate_per_day":"Phạt mỗi ngày (VND)","overdue_fine_cap":"Trần tiền phạt (VND)"}
     def clean(self):
         data=super().clean()
