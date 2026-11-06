@@ -26,7 +26,7 @@
         if (url.origin === location.origin) location.assign(url.href);
       } else {
         input.value = row.value; input.dispatchEvent(new Event('change', {bubbles: true}));
-        close(); status.textContent = `Đã chọn: ${row.label} · ${row.detail}`;
+        close(); input.focus({preventScroll:true}); status.textContent = `Đã chọn: ${row.label} · ${row.detail}`;
       }
     };
     input.addEventListener('input', () => {
