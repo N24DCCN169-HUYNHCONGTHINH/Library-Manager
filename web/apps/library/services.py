@@ -433,7 +433,7 @@ def renew_loan(loan_id, actor, idempotency_key=None):
 
 
 @circulation_write
-def place_reservation(reader, book_id, actor):
+def place_reservation(reader, book_id, actor, *, allow_available=False):
     if reader.user_id != getattr(actor, "pk", None):
         raise CirculationError("Bạn chỉ được đặt trước bằng hồ sơ bạn đọc của chính mình.")
     reader = ReaderProfile.objects.select_for_update().select_related("user").get(pk=reader.pk)
@@ -446,18 +446,35 @@ def place_reservation(reader, book_id, actor):
     if not loanable_copies.exists():
         raise CirculationError("Tài liệu chỉ phục vụ đọc tại chỗ, không nhận đặt trước.")
     queueable_copies = loanable_copies.filter(status__in=[BookCopy.Status.ON_LOAN, BookCopy.Status.ON_HOLD, BookCopy.Status.RETURN_PENDING])
-    if not queueable_copies.exists():
+    available_copies = loanable_copies.filter(status=BookCopy.Status.AVAILABLE)
+    if not queueable_copies.exists() and not (allow_available and available_copies.exists()):
         raise CirculationError("Hiện không có bản sách mượn về nào đang lưu thông để đặt trước.")
     sample_copy = loanable_copies.first()
     policy = _policy(reader, sample_copy, timezone.localdate())
     if not policy.allow_home_loan:
         raise CirculationError("Chính sách hiện tại không cho đặt trước loại tài liệu này.")
     _assert_eligible(reader, policy)
-    if loanable_copies.filter(status=BookCopy.Status.AVAILABLE).exists():
+    if not allow_available and available_copies.exists():
         raise CirculationError("Đang có bản sẵn sàng; hãy liên hệ quầy để mượn.")
     if Reservation.objects.filter(reader=reader, book=book, status__in=[Reservation.Status.WAITING, Reservation.Status.READY]).exists():
         raise CirculationError("Bạn đã có yêu cầu đặt trước đang hoạt động cho sách này.")
-    return Reservation.objects.create(reader=reader, book=book)
+    reservation = Reservation.objects.create(reader=reader, book=book)
+    if allow_available:
+        for copy in available_copies.order_by("pk"):
+            allocate_next_reservation(copy, actor)
+            reservation.refresh_from_db()
+            if reservation.status != Reservation.Status.WAITING:
+                break
+    return reservation
+
+
+@circulation_write
+def request_return(loan_id, actor):
+    loan = Loan.objects.select_for_update().get(pk=loan_id, reader__user=actor)
+    if loan.status != Loan.Status.OPEN:
+        raise CirculationError("Lượt mượn này đã đóng.")
+    LoanEvent.objects.get_or_create(loan=loan, event_type="return_requested", defaults={"actor": actor})
+    return loan
 
 
 @circulation_write

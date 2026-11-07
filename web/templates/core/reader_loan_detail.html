@@ -5,6 +5,16 @@
   <h1>{{ loan.copy.book.title }}</h1>
   <p>Lượt #{{ loan.pk }} · Bản {{ loan.copy.barcode }} · {{ loan.get_status_display }}</p>
   <p>Mượn: {{ loan.loaned_at|date:"d/m/Y H:i" }} · Hạn trả: {{ loan.due_at|date:"d/m/Y H:i" }}{% if loan.returned_at %} · Đã trả: {{ loan.returned_at|date:"d/m/Y H:i" }}{% endif %}</p>
+  {% if loan.status == "open" %}
+    {% if return_requested %}
+      <p>Đã yêu cầu trả. Vui lòng mang sách tới quầy. Hạn trả vẫn theo phiếu cho đến khi thủ thư nhận sách.</p>
+    {% else %}
+      <form method="post" action="{% url 'library:request_return' loan.pk %}">
+        {% csrf_token %}
+        <button type="submit">Yêu cầu trả sách</button>
+      </form>
+    {% endif %}
+  {% endif %}
   <h2>Lịch sử gia hạn</h2>
   {% for renewal in renewals %}<p>{{ renewal.renewed_at|date:"d/m/Y H:i" }} · Hạn cũ {{ renewal.old_due_at|date:"d/m/Y H:i" }} → hạn mới {{ renewal.new_due_at|date:"d/m/Y H:i" }}</p>{% empty %}<p>Chưa gia hạn.</p>{% endfor %}
   <h2>Khoản phạt và biên nhận</h2>

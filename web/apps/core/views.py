@@ -204,6 +204,7 @@ def reader_loan_detail(request, loan_id):
                              pk=loan_id, reader__user=request.user)
     fine = Fine.objects.filter(loan=loan).first()
     return render(request, "core/reader_loan_detail.html", {"loan": loan, "fine": fine,
+        "return_requested": loan.events.filter(event_type="return_requested").exists(),
         "renewals": loan.renewals.order_by("renewed_at", "pk"),
         "payments": fine.transactions.order_by("created_at", "pk") if fine else []})
 

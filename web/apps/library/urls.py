@@ -18,6 +18,7 @@ urlpatterns = [
     path("payments/", payments.payment_history, name="payment_history"),
     path("payments/<uuid:order_id>/", payments.payment_detail, name="payment_detail"),
     path("payments/<uuid:order_id>/simulate/", payments.simulate_payment, name="simulate_payment"),
+    path("loans/<int:loan_id>/request-return/", views.request_return_view, name="request_return"),
     path("payments/vnpay/ipn/", payments.vnpay_ipn, name="vnpay_ipn"),
     path("payments/momo/ipn/", payments.momo_ipn, name="momo_ipn"),
     path("lookup/", lookup, name="lookup"),

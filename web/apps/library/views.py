@@ -3,7 +3,7 @@ from django.contrib.auth.decorators import login_required, user_passes_test
 from django.core.exceptions import ObjectDoesNotExist
 from django.core.paginator import Paginator
 from django.db.models import Count, Exists, OuterRef, Prefetch, Q
-from django.http import HttpResponseForbidden, JsonResponse
+from django.http import Http404, HttpResponseForbidden, JsonResponse
 from django.template.loader import render_to_string
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
@@ -14,9 +14,9 @@ from django.views.decorators.http import require_POST
 from apps.core.models import ReaderProfile
 from apps.core.views import has_role, staff_mfa_required
 from .forms import BookForm, CheckoutForm, FinePaymentForm, ReturnForm, RenewalForm, ReopenReaderForm
-from .models import Book, BookCopy, DamageCase, Fine, LibraryBranch, Loan, LoanNotification, Reservation
+from .models import Book, BookCopy, DamageCase, Fine, LibraryBranch, Loan, LoanEvent, LoanNotification, Reservation
 from .services import CirculationError, cancel_reservation, checkout_copy, place_reservation, record_fine_payment, renew_loan, return_copy, expire_ready_reservations
-from .services import reopen_reader
+from .services import reopen_reader, request_return
 from .forms import DamageQuoteForm
 from .damage_pricing import quote_damage
 
@@ -30,7 +30,7 @@ def staff_loan_detail(request, loan_id):
     fine = Fine.objects.filter(loan=loan).first() if request.user.has_perm("library.view_fine") else None
     events = list(loan.events.select_related("actor").order_by("occurred_at", "pk")) if request.user.has_perm("library.view_loanevent") else []
     event_labels = {"checkout": "Cho mượn", "return": "Nhận trả", "renewal": "Gia hạn", "renew": "Gia hạn",
-        "long_overdue_review": "Chạm trần phạt — cần xem xét", "damage_approved": "Duyệt hồ sơ hư hỏng"}
+        "long_overdue_review": "Chạm trần phạt — cần xem xét", "damage_approved": "Duyệt hồ sơ hư hỏng", "return_requested": "Độc giả yêu cầu trả"}
     for event in events:
         event.display_label = event_labels.get(event.event_type, "Cập nhật giao dịch")
     return render(request, "library/staff_loan_detail.html", {"loan": loan, "fine": fine,
@@ -194,7 +194,8 @@ def circulation_desk(request):
                 forms[action].add_error(None, str(exc) if isinstance(exc, CirculationError) else "Không tìm thấy độc giả, bản sách hoặc lượt giao dịch.")
             else:
                 messages.error(request, str(exc))
-    loans = list(Loan.objects.filter(status=Loan.Status.OPEN).select_related("reader", "copy__book").defer('copy__book__cover_image').order_by("due_at")[:50])
+    return_requests = LoanEvent.objects.filter(loan_id=OuterRef("pk"), event_type="return_requested")
+    loans = list(Loan.objects.filter(status=Loan.Status.OPEN).annotate(return_requested=Exists(return_requests)).select_related("reader", "copy__book").defer('copy__book__cover_image').order_by("due_at")[:50])
     overdue_loans = [loan for loan in loans if loan.due_at < timezone.now()]
     unpaid_fines = Fine.objects.filter(status=Fine.Status.DUE).select_related("loan__reader", "loan__copy__book").defer('loan__copy__book__cover_image').prefetch_related("transactions").order_by("calculated_at")[:50]
     reservations = Reservation.objects.select_related("reader", "book", "copy", "notification").defer('book__cover_image').filter(status__in=[Reservation.Status.WAITING, Reservation.Status.READY]).order_by("created_at", "pk")[:50]
@@ -215,11 +216,31 @@ def reserve(request, book_id):
     if request.method == "POST":
         try:
             profile = request.user.reader_profile
-            place_reservation(profile, book_id, request.user)
-            messages.success(request, "Đã thêm bạn vào hàng chờ của đầu sách.")
+            reservation = place_reservation(profile, book_id, request.user, allow_available=True)
+            if reservation.status == Reservation.Status.READY:
+                messages.success(request, "Sách đã được giữ. Xem hạn nhận tại cổng độc giả và đến quầy để nhận.")
+            elif reservation.status == Reservation.Status.WAITING:
+                messages.success(request, "Đã thêm bạn vào hàng chờ của đầu sách.")
+            else:
+                messages.error(request, reservation.close_reason)
         except (CirculationError, ObjectDoesNotExist, Book.DoesNotExist) as exc:
             messages.error(request, str(exc) or "Không thể tạo yêu cầu đặt trước.")
     return redirect("library:catalog")
+
+
+@never_cache
+@login_required
+@user_passes_test(has_role("reader"), login_url="home")
+@require_POST
+def request_return_view(request, loan_id):
+    try:
+        request_return(loan_id, request.user)
+        messages.success(request, "Đã gửi yêu cầu. Hãy mang sách tới quầy để thủ thư xác nhận.")
+    except Loan.DoesNotExist as exc:
+        raise Http404 from exc
+    except CirculationError as exc:
+        messages.error(request, str(exc))
+    return redirect("reader_loan_detail", loan_id=loan_id)
 
 
 @never_cache
