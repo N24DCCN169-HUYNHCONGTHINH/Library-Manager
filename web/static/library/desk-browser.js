@@ -39,7 +39,10 @@
       if(desk.dataset.activeTab==='return'){
         const input=document.getElementById('checkout_reader_number');if(input)input.value=code;
         if([...kind.options].some(option=>option.value==='loans')){kind.value='loans';query.value=code;updateFilter();load();}
-      }else fill('checkout_reader_number');
+      } else {
+        if (desk.dataset.activeTab !== 'checkout') desk.querySelector('.desk-tabs a[data-desk-tab="checkout"]').click();
+        fill('checkout_reader_number');
+      }
     }else{
       const target=button.dataset.deskPick;
       if(!['checkout','return'].includes(target))return;

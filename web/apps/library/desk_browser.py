@@ -10,6 +10,8 @@ from apps.core.models import ReaderProfile
 from apps.core.views import staff_mfa_required
 from .models import BookCopy, Loan
 
+DESK_TABS = {"checkout", "return", "loans", "renew", "damage", "overdue", "notices", "reservations", "fines"}
+
 KINDS={"readers":("core.view_readerprofile",),"copies":("library.view_book","library.view_bookcopy"),"loans":("library.view_loan","core.view_readerprofile","library.view_bookcopy","library.view_book")}
 
 def can_browse(user):
@@ -18,7 +20,10 @@ def can_browse(user):
 def browser_context(request):
     allowed=[kind for kind,permissions in KINDS.items() if request.user.has_perms(permissions)]
     if not allowed: return {"desk_browser_enabled":False}
-    kind=request.GET.get("desk_kind", "loans" if request.GET.get("tab")=="return" and "loans" in allowed else allowed[0])
+    tab = request.GET.get("tab", "checkout")
+    if tab not in DESK_TABS:
+        tab = "checkout"
+    kind=request.GET.get("desk_kind", "loans" if tab=="return" and "loans" in allowed else allowed[0])
     if kind not in KINDS: kind=allowed[0]
     if kind not in allowed: raise PermissionError
     query=request.GET.get("desk_q", "").strip()[:120]
@@ -35,7 +40,7 @@ def browser_context(request):
         rows=Loan.objects.filter(status=Loan.Status.OPEN).select_related("copy__book","copy__branch","reader__user").defer("copy__book__cover_image","reader__user__password","reader__user__email").order_by("due_at","pk")
         if query: rows=rows.filter(Q(copy__barcode__icontains=query)|Q(copy__book__title__icontains=query)|Q(reader__reader_number__icontains=query)|Q(reader__user__first_name__icontains=query)|Q(reader__user__last_name__icontains=query))
     page=Paginator(rows,8).get_page(request.GET.get("desk_page"))
-    return {"desk_browser_enabled":True,"desk_allowed_kinds":allowed,"desk_kind":kind,"desk_query":query,"desk_status":status,"desk_page":page,"desk_today":timezone.localdate(),"desk_tab":"return" if request.GET.get("tab")=="return" else "checkout"}
+    return {"desk_browser_enabled":True,"desk_allowed_kinds":allowed,"desk_kind":kind,"desk_query":query,"desk_status":status,"desk_page":page,"desk_today":timezone.localdate(),"desk_tab":tab}
 
 @never_cache
 @staff_mfa_required

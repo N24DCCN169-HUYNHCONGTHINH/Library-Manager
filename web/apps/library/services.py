@@ -133,6 +133,23 @@ def checkout_copy(reader_number, barcode, actor, idempotency_key=None):
     return _checkout_copy(reader_number, barcode, actor, idempotency_key)
 
 
+def checkout_reservation(reservation_id, actor):
+    _require_permission(actor, "checkout_loan")
+    expire_ready_reservations()
+    return _checkout_reservation(reservation_id, actor)
+
+
+@circulation_write
+def _checkout_reservation(reservation_id, actor):
+    reservation = Reservation.objects.select_related("reader", "copy").filter(
+        pk=reservation_id, status=Reservation.Status.READY,
+        copy__status=BookCopy.Status.ON_HOLD, expires_at__gt=timezone.now(),
+    ).first()
+    if reservation is None:
+        raise CirculationError("Yêu cầu này không còn sẵn sàng để giao sách.")
+    return _checkout_copy(reservation.reader.reader_number, reservation.copy.barcode, actor)
+
+
 @circulation_write
 def _checkout_copy(reader_number, barcode, actor, idempotency_key=None):
     _require_permission(actor, "checkout_loan")

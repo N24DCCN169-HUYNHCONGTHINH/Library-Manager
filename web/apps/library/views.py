@@ -1,3 +1,5 @@
+from datetime import datetime, time, timedelta
+
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required, user_passes_test
 from django.core.exceptions import ObjectDoesNotExist
@@ -16,7 +18,7 @@ from apps.core.views import has_role, staff_mfa_required
 from .forms import BookForm, CheckoutForm, FinePaymentForm, ReturnForm, RenewalForm, ReopenReaderForm
 from .models import Book, BookCopy, DamageCase, Fine, LibraryBranch, Loan, LoanEvent, LoanNotification, Reservation
 from .services import CirculationError, cancel_reservation, checkout_copy, place_reservation, record_fine_payment, renew_loan, return_copy, expire_ready_reservations
-from .services import reopen_reader, request_return
+from .services import checkout_reservation, reopen_reader, request_return
 from .forms import DamageQuoteForm
 from .damage_pricing import quote_damage
 
@@ -135,12 +137,12 @@ def catalog(request):
 def circulation_desk(request):
     if not (request.user.is_superuser or (request.user.has_perm("library.view_loan") and request.user.has_perm("library.view_fine"))):
         return HttpResponseForbidden("Bạn không được cấp quyền xem quầy lưu thông.")
-    tabs = {"checkout", "return", "loans", "renew", "damage", "overdue", "notices", "reservations", "fines"}
-    action_tabs = {"checkout": "checkout", "return": "return", "renew": "renew", "payment": "fines", "reopen": "overdue", "expire": "reservations"}
+    from .desk_browser import DESK_TABS, browser_context
+    action_tabs = {"pickup": "reservations", "checkout": "checkout", "return": "return", "renew": "renew", "payment": "fines", "reopen": "overdue", "expire": "reservations"}
     active_tab = request.GET.get("tab", "checkout")
     if request.method == "POST":
         active_tab = action_tabs.get(request.POST.get("action"), "checkout")
-    if active_tab not in tabs:
+    if active_tab not in DESK_TABS:
         active_tab = "checkout"
     checkout_initial = {"barcode": request.GET.get("barcode", "")[:64]} if request.method == "GET" else {}
     checkout_form = CheckoutForm(request.POST if request.method == "POST" and request.POST.get("action") == "checkout" else None, initial=checkout_initial, auto_id="checkout_%s")
@@ -158,11 +160,18 @@ def circulation_desk(request):
         try:
             action = request.POST.get("action")
             forms = {"checkout": checkout_form, "return": return_form, "payment": payment_form, "renew": renewal_form, "reopen": reopen_form}
-            permissions = {"checkout": "checkout_loan", "return": "return_loan", "payment": "collect_finepayment", "renew": "renew_loan", "expire": "manage_reservation", "reopen": "manage_reader_restrictions"}
+            permissions = {"pickup": "checkout_loan", "checkout": "checkout_loan", "return": "return_loan", "payment": "collect_finepayment", "renew": "renew_loan", "expire": "manage_reservation", "reopen": "manage_reader_restrictions"}
             if action not in permissions:
                 messages.error(request, "Thao tác không hợp lệ.")
             elif not request.user.has_perm(f"library.{permissions[action]}"):
                 return HttpResponseForbidden("Bạn không được cấp quyền thực hiện thao tác này.")
+            elif action == "pickup":
+                reservation_id = request.POST.get("reservation_id", "")
+                if not reservation_id.isascii() or not reservation_id.isdecimal() or len(reservation_id) > 18:
+                    raise CirculationError("Mã yêu cầu giữ chỗ không hợp lệ.")
+                loan = checkout_reservation(int(reservation_id), request.user)
+                messages.success(request, f"Đã tạo phiếu mượn #{loan.pk}. Hạn trả: {timezone.localtime(loan.due_at):%d/%m/%Y %H:%M}.")
+                return redirect(reverse("library:circulation_desk") + "?tab=reservations")
             elif action == "expire":
                 count = expire_ready_reservations()
                 if request.headers.get("Accept") == "application/json":
@@ -195,15 +204,47 @@ def circulation_desk(request):
             else:
                 messages.error(request, str(exc))
     return_requests = LoanEvent.objects.filter(loan_id=OuterRef("pk"), event_type="return_requested")
-    loans = list(Loan.objects.filter(status=Loan.Status.OPEN).annotate(return_requested=Exists(return_requests)).select_related("reader", "copy__book").defer('copy__book__cover_image').order_by("due_at")[:50])
-    overdue_loans = [loan for loan in loans if loan.due_at < timezone.now()]
+    open_loans = Loan.objects.filter(status=Loan.Status.OPEN).annotate(
+        return_requested=Exists(return_requests),
+    ).select_related("reader", "copy__book").defer("copy__book__cover_image").order_by("due_at", "pk")
+    now = timezone.now()
+    end_date = timezone.localdate(now) + timedelta(days=4)
+    end = timezone.make_aware(datetime.combine(end_date, time.min))
+    overdue_loans = open_loans.filter(due_at__lt=now)[:50]
+    due_soon_loans = open_loans.filter(due_at__gte=now, due_at__lt=end)[:50]
+    loan_filters = {
+        "all": ("Tất cả phiếu đang mở", Q()),
+        "due_soon": ("Sắp đến hạn", Q(due_at__gte=now, due_at__lt=end)),
+        "overdue": ("Quá hạn", Q(due_at__lt=now)),
+        "in_time": ("Còn hơn 3 ngày", Q(due_at__gte=end)),
+        "return_requested": ("Đã yêu cầu trả", Q(return_requested=True)),
+    }
+    loan_status = request.GET.get("loan_status", "all")
+    if loan_status not in loan_filters:
+        loan_status = "all"
+    loan_query = request.GET.get("loan_q", "").strip()[:100]
+    loans = open_loans.filter(loan_filters[loan_status][1])
+    if loan_query:
+        matches = (
+            Q(copy__book__title__icontains=loan_query)
+            | Q(copy__barcode__icontains=loan_query)
+            | Q(reader__reader_number__icontains=loan_query)
+            | Q(reader__user__username__icontains=loan_query)
+        )
+        loan_number = loan_query.removeprefix("#").strip()
+        if loan_number.isascii() and loan_number.isdecimal() and len(loan_number) <= 18:
+            matches |= Q(pk=int(loan_number))
+        loans = loans.filter(matches)
+
+
     unpaid_fines = Fine.objects.filter(status=Fine.Status.DUE).select_related("loan__reader", "loan__copy__book").defer('loan__copy__book__cover_image').prefetch_related("transactions").order_by("calculated_at")[:50]
     reservations = Reservation.objects.select_related("reader", "book", "copy", "notification").defer('book__cover_image').filter(status__in=[Reservation.Status.WAITING, Reservation.Status.READY]).order_by("created_at", "pk")[:50]
-    from .desk_browser import browser_context
     try: browse = browser_context(request)
     except PermissionError: return HttpResponseForbidden()
-    return render(request, "library/circulation_desk.html", {**browse,"checkout_form": checkout_form, "return_form": return_form, "payment_form": payment_form, "renewal_form": renewal_form, "reopen_form": reopen_form, "loans": loans, "overdue_loans": overdue_loans, "active_tab": active_tab,
+    return render(request, "library/circulation_desk.html", {**browse,"checkout_form": checkout_form, "return_form": return_form, "payment_form": payment_form, "renewal_form": renewal_form, "reopen_form": reopen_form, "loans": loans[:50], "loan_query": loan_query, "loan_status": loan_status,
+        "loan_filter_options": [(key, label) for key, (label, _) in loan_filters.items()], "overdue_loans": overdue_loans, "active_tab": active_tab,
         "damage_cases": DamageCase.objects.select_related("loan__copy__book", "loan__reader").defer('loan__copy__book__cover_image').order_by("-reported_at")[:50] if request.user.has_perm("library.view_damagecase") else [],
+        "due_soon_loans": due_soon_loans,
         "loan_notices": LoanNotification.objects.select_related("loan__copy__book", "loan__reader").defer('loan__copy__book__cover_image').order_by("-created_at")[:50] if request.user.has_perm("library.view_loannotification") else [],
         "unpaid_fines": unpaid_fines, "reservations": reservations})
 

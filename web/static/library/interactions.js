@@ -5,6 +5,11 @@
   if (!endpoint) return;
   const desk = document.getElementById('desk-workspace');
   if (desk) {
+    desk.addEventListener('dblclick', event => {
+      if (event.target.closest('button, a, input, form')) return;
+      const form = event.target.closest('#reservation-results tr')?.querySelector('[data-reservation-pickup]');
+      if (form) form.requestSubmit();
+    });
     const legacy = {'open-loans':'loans',reservations:'reservations',fines:'fines'};
     const panels = [...desk.querySelectorAll('[data-desk-panel]')];
     const activate = (name, push=false) => {
@@ -15,7 +20,7 @@
       });
       desk.dataset.activeTab = name;
       const browser = document.getElementById('desk-browser');
-      if(browser){browser.hidden=!['checkout','return'].includes(name);browser.querySelector('input[name=tab]').value=name;}
+      if (browser) browser.querySelector('input[name=tab]').value = name;
       desk.dispatchEvent(new CustomEvent('desk:tab-change',{detail:{tab:name}}));
       if (push) { const url = new URL(location.href); url.searchParams.set('tab',name); url.hash=''; if(url.href!==location.href)history.pushState({},'',url); }
     };
