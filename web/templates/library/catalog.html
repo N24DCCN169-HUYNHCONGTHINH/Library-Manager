@@ -25,6 +25,15 @@
       {% if perms.library.view_bookcopy %}<p>Mã bản sách: <code>{{ copy.barcode }}</code></p>{% if library_roles.can_circulate and copy.status == 'available' %}<a class="btn btn-sm btn-outline-primary" href="{% url 'library:circulation_desk' %}?barcode={{ copy.barcode|urlencode }}">Mượn bản này tại quầy →</a>{% endif %}{% endif %}</div>
       {% empty %}<p>Chưa có bản sách tại cơ sở đã chọn.</p>{% endfor %}</details>
       {% if is_reader and selected_branch and book.available_copies_count == 0 and book.has_available_copies_anywhere %}<p>Có bản sẵn sàng tại cơ sở khác; hãy chọn “Tất cả cơ sở” để xem vị trí.</p>{% endif %}
+      {% if not book.has_loanable_copies %}
+        <p>Hiện không có bản được phép mượn về. Trạng thái “Sẵn sàng” cho biết bản có tại cơ sở.</p>
+      {% elif not request.user.is_authenticated %}
+        <p>Đăng nhập bằng tài khoản độc giả để yêu cầu mượn hoặc đặt trước.</p>
+      {% elif not is_reader %}
+        <p>Tài khoản hiện tại không có vai trò độc giả để yêu cầu mượn hoặc đặt trước.</p>
+      {% elif book.available_copies_count and not book.has_available_loanable_copies %}
+        <p>Các bản đang sẵn sàng không được mượn về. Bạn có thể đặt trước bản đủ điều kiện.</p>
+      {% endif %}
       {% if is_reader and book.has_loanable_copies %}<form method="post" action="{% url 'library:reserve' book.id %}">{% csrf_token %}<button type="submit">{% if book.has_available_loanable_copies %}Yêu cầu mượn{% else %}Đặt trước{% endif %}</button></form>{% endif %}
     </div></article>
   {% empty %}<p class="empty-state">Không tìm thấy đầu sách phù hợp.</p>{% endfor %}
