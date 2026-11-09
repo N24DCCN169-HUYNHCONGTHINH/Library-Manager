@@ -56,3 +56,25 @@ class EmailOTPTests(TestCase):
         response=self.client.post(reverse("email_otp_verify"),{"code":code})
         self.assertEqual(response.status_code,302)
         self.assertRedirects(self.client.get(reverse("profile")),reverse("password_change"))
+
+    def test_staff_can_switch_from_authenticator_to_email(self):
+        from django_otp.plugins.otp_totp.models import TOTPDevice
+
+        self.user.is_superuser = True
+        self.user.is_staff = True
+        self.user.save(update_fields=["is_superuser", "is_staff"])
+        TOTPDevice.objects.create(user=self.user, confirmed=True)
+        self.client.force_login(self.user)
+        destination = reverse("staff_dashboard")
+        session = self.client.session
+        session["staff_mfa_next"] = destination
+        session.save()
+
+        verify_url = reverse("otp_verify")
+        self.assertContains(self.client.get(verify_url), "send_email_otp")
+        response = self.client.post(verify_url, {"action": "send_email_otp"})
+        self.assertRedirects(response, reverse("email_otp_verify"))
+        self.assertEqual(mail.outbox[-1].to, [self.user.email])
+        code = re.search(r"([0-9]{6})", mail.outbox[-1].body).group(1)
+        response = self.client.post(reverse("email_otp_verify"), {"code": code})
+        self.assertRedirects(response, destination)

@@ -6,7 +6,7 @@
   {% if confirmed %}
     <h1 id="confirm-email-title">Đã xác nhận email mới</h1>
     <p>Email tài khoản của bạn đã được cập nhật và xác minh.</p>
-    <a class="btn btn-primary" href="{% url 'home' %}">Về trang chủ</a>
+    <a class="btn btn-primary" href="{% if user.is_authenticated %}{% url 'profile' %}{% else %}{% url 'home' %}{% endif %}">Tiếp tục</a>
   {% elif not valid_link %}
     <h1 id="confirm-email-title">Liên kết không còn hiệu lực</h1>
     <p>Liên kết có thể đã được dùng hoặc đã hết hạn. Bạn có thể tạo yêu cầu mới trong tài khoản.</p>
@@ -14,8 +14,8 @@
   {% else %}
     <h1 id="confirm-email-title">Xác nhận đổi email</h1>
     {% if needs_staff_mfa %}
-      <p>Hãy xác thực tài khoản nhân viên đã yêu cầu đổi email, sau đó mở lại liên kết trong Gmail.</p>
-      <a class="btn btn-primary" href="{% url 'login' %}">Xác thực tài khoản nhân viên</a>
+      <p>Hãy xác thực tài khoản nhân viên đã yêu cầu đổi email, sau đó bạn sẽ quay lại trang này để xác nhận.</p>
+      <a class="btn btn-primary" href="{% url 'login' %}?next={{ request.path|urlencode }}">Xác thực tài khoản nhân viên</a>
     {% else %}
       <p>Bấm xác nhận để dùng địa chỉ email mới cho tài khoản Library Hub.</p>
       <form method="post">

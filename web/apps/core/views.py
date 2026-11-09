@@ -14,7 +14,7 @@ from django.core.exceptions import ObjectDoesNotExist, ValidationError
 from django.core.paginator import Paginator
 from django.db import transaction
 from django.db.models import F, Q
-from django.http import HttpResponseBadRequest, JsonResponse
+from django.http import HttpResponseBadRequest, HttpResponseForbidden, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
 from django.utils.http import url_has_allowed_host_and_scheme
@@ -75,7 +75,7 @@ def has_staff_role(user):
 def _staff_destination(request):
     destination = request.session.pop("staff_mfa_next", "")
     if (destination and url_has_allowed_host_and_scheme(destination, {request.get_host()}, require_https=request.is_secure())
-            and "/accounts/" not in destination):
+            and ("/accounts/" not in destination or destination.startswith("/accounts/email/confirm/"))):
         return destination
     return reverse("staff_dashboard")
 
@@ -376,6 +376,20 @@ def otp_verify(request):
         return redirect("home")
     if request.user.is_verified():
         return redirect(_staff_destination(request))
+    from .email_otp import send_code, verified_email
+
+    can_use_email = verified_email(request.user)
+    if request.method == "POST" and request.POST.get("action") == "send_email_otp":
+        if not can_use_email:
+            return HttpResponseForbidden("Tài khoản cần có email đã xác minh.")
+        if not request.session.get("email_otp_pending"):
+            request.session["email_otp_pending"] = True
+            request.session["email_otp_next"] = request.session.get("staff_mfa_next") or reverse("staff_dashboard")
+            try:
+                send_code(request)
+            except ValidationError as exc:
+                messages.error(request, str(exc.messages[0]))
+        return redirect("email_otp_verify")
     devices = TOTPDevice.objects.filter(user=request.user, confirmed=True)
     if not devices.exists():
         return redirect("otp_setup")
@@ -390,7 +404,7 @@ def otp_verify(request):
                 request.session.pop("email_otp_pending", None)
                 return redirect(_staff_destination(request))
         form.add_error("code", "Mã không hợp lệ hoặc đã hết hạn. Hãy thử mã mới.")
-    return render(request, "registration/otp_verify.html", {"form": form})
+    return render(request, "registration/otp_verify.html", {"form": form, "can_use_email": can_use_email})
 
 
 def health(request):
