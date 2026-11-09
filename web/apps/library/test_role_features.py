@@ -188,7 +188,7 @@ class RoleFeatureTests(TestCase):
     def test_librarian_can_open_vnpay_for_exact_compensation_total(self):
         from unittest.mock import patch
         from urllib.parse import parse_qs, urlsplit
-        from .models import DamageCase
+        from .models import DamageCase, LoanEvent
         from .payments import vnpay_signature
 
         case = DamageCase.objects.create(
@@ -215,6 +215,18 @@ class RoleFeatureTests(TestCase):
             }
             data["vnp_SecureHash"] = vnpay_signature(data, "test-secret")
             self.assertEqual(self.client.get(reverse("library:vnpay_ipn"), data).json()["RspCode"], "00")
+        confirm = reverse("library:confirm_damage_sandbox", args=[case.pk])
+        desk = reverse("library:circulation_desk") + "?tab=loans&operation=fines"
+        self.login(self.reader_a)
+        self.assertEqual(self.client.post(confirm, {"order_id": order.pk}).status_code, 403)
+        self.login(self.librarian)
+        self.assertContains(self.client.get(desk), "Xác nhận thanh toán thử")
+        for _ in range(2):
+            self.assertEqual(self.client.post(confirm, {"order_id": order.pk}).status_code, 302)
+        self.assertEqual(LoanEvent.objects.filter(event_type="damage_sandbox_confirmed", reason=order.pk.hex).count(), 1)
+        response = self.client.get(desk)
+        self.assertContains(response, "Đã xác nhận thanh toán thử tại quầy")
+        self.assertNotContains(response, "Xác nhận thanh toán thử</button>")
         case.refresh_from_db()
         self.assertEqual(case.status, DamageCase.Status.APPROVED)
         self.assertIsNone(case.settled_at)

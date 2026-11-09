@@ -17,7 +17,7 @@ from django.views.decorators.cache import never_cache
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_POST, require_GET
 from apps.core.views import has_staff_role
-from .models import DamageCase, PaymentOrder, Fine
+from .models import DamageCase, PaymentOrder, Fine, LoanEvent
 
 class PaymentStartForm(forms.Form):
     request_key=forms.UUIDField(initial=uuid.uuid4,widget=forms.HiddenInput)
@@ -107,6 +107,29 @@ def payment_start(request,fine_id):
             form.add_error(None,exc if isinstance(exc,ValidationError) else "Yêu cầu trùng. Hãy mở lại lịch sử giao dịch thử.")
         else: return redirect("library:payment_detail",order_id=order.pk)
     return render(request,"library/payment_start.html",{"fine":fine,"form":form,"momo_ready":all(momo_keys()),"bank_ready":bank_ready})
+
+@never_cache
+@payment_access
+@require_POST
+def confirm_damage_sandbox(request, case_id):
+    if not has_staff_role(request.user) or not request.user.has_perm("library.collect_finepayment"):
+        return HttpResponseForbidden()
+    back = reverse("library:circulation_desk") + "?tab=loans&operation=fines#fines"
+    with transaction.atomic():
+        case = get_object_or_404(DamageCase.objects.select_for_update(), pk=case_id)
+        order = case.payment_orders.filter(
+            mode="vnpay_sandbox", state="success", amount=case.compensation_total,
+        ).order_by("completed_at", "pk").first()
+        if case.status != DamageCase.Status.APPROVED or order is None or str(order.pk) != request.POST.get("order_id"):
+            messages.error(request, "Không còn giao dịch thử phù hợp để xác nhận.")
+            return redirect(back)
+        LoanEvent.objects.get_or_create(
+            loan_id=case.loan_id, event_type="damage_sandbox_confirmed", reason=order.pk.hex,
+            defaults={"actor": request.user, "details": {"case_id": case.pk, "amount": int(order.amount)}},
+        )
+    messages.success(request, "Đã xác nhận giao dịch thử tại quầy.")
+    return redirect(back)
+
 
 @never_cache
 @payment_access

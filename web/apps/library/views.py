@@ -4,7 +4,8 @@ from django.contrib import messages
 from django.contrib.auth.decorators import login_required, user_passes_test
 from django.core.exceptions import ObjectDoesNotExist
 from django.core.paginator import Paginator
-from django.db.models import Count, Exists, F, OuterRef, Prefetch, Q, Subquery
+from django.db.models import CharField, Count, Exists, F, OuterRef, Prefetch, Q, Subquery, Value
+from django.db.models.functions import Cast, Replace
 from django.http import Http404, HttpResponseForbidden, JsonResponse
 from django.template.loader import render_to_string
 from django.shortcuts import get_object_or_404, redirect, render
@@ -16,7 +17,7 @@ from django.views.decorators.http import require_POST
 from apps.core.models import ReaderProfile, SystemConfiguration
 from apps.core.views import has_role, staff_mfa_required
 from .forms import BookForm, CheckoutForm, FinePaymentForm, ReturnForm, RenewalForm, ReopenReaderForm, ReservationRequestForm
-from .models import Book, BookCopy, DamageCase, Fine, LibraryBranch, Loan, LoanEvent, LoanNotification, Reservation
+from .models import Book, BookCopy, DamageCase, Fine, LibraryBranch, Loan, LoanEvent, LoanNotification, PaymentOrder, Reservation
 from .services import CirculationError, DamageRestrictionError, cancel_reservation, checkout_copy, place_reservation, record_fine_payment, renew_loan, return_copy, expire_ready_reservations
 from .services import checkout_reservation, reopen_reader, request_return, report_lost_loan, settle_damage_case, update_damaged_copy_status
 from .services import approve_damage_case, prepare_loan_notifications, refresh_overdue_loans
@@ -368,6 +369,17 @@ def circulation_desk(request):
         status__in=[DamageCase.Status.APPROVED, DamageCase.Status.SETTLED],
         replacement_amount__isnull=False,
     ).select_related("loan__copy__book", "loan__reader").defer("loan__copy__book__cover_image").order_by("-pk")
+    if loan_operation == "fines" and request.user.has_perm("library.collect_finepayment"):
+        successful_orders = PaymentOrder.objects.filter(
+            damage_case_id=OuterRef("pk"), mode="vnpay_sandbox", state="success",
+            amount=OuterRef("replacement_amount") + OuterRef("processing_fee"),
+        ).order_by("completed_at", "pk")
+        damage_receivables = damage_receivables.annotate(
+            sandbox_order_id=Subquery(successful_orders.values("pk")[:1]),
+        ).annotate(sandbox_confirmed=Exists(LoanEvent.objects.filter(
+            loan_id=OuterRef("loan_id"), event_type="damage_sandbox_confirmed",
+            reason=Replace(Cast(OuterRef("sandbox_order_id"), CharField()), Value("-"), Value("")),
+        )))
     if selected_fine_loan is not None:
         overdue_fines = overdue_fines.filter(loan_id=selected_fine_loan)
         damage_receivables = damage_receivables.filter(loan_id=selected_fine_loan)

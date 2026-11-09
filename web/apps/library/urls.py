@@ -16,6 +16,7 @@ urlpatterns = [
     path("staff/books/<int:book_id>/retire/", management_views.retire_book, name="retire_book"),
     path("covers/<int:book_id>/", management_views.cover_image, name="cover_image"),
     path("payments/damage/<int:case_id>/vnpay/", payments.damage_payment_start, name="damage_payment_start"),
+    path("payments/damage/<int:case_id>/confirm-sandbox/", payments.confirm_damage_sandbox, name="confirm_damage_sandbox"),
     path("payments/fines/<int:fine_id>/", payments.payment_start, name="payment_start"),
     path("payments/", payments.payment_history, name="payment_history"),
     path("payments/<uuid:order_id>/", payments.payment_detail, name="payment_detail"),

@@ -141,6 +141,16 @@
     {% else %}
       <p>Chờ thu</p>
       {% if perms.library.collect_finepayment and case.compensation_total %}
+        {% if case.sandbox_confirmed %}
+          <p><strong>Đã xác nhận thanh toán thử tại quầy</strong> · VNPAY Sandbox</p>
+        {% elif case.sandbox_order_id %}
+          <p>Giao dịch VNPAY Sandbox thành công, chờ quầy xác nhận.</p>
+          <form method="post" action="{% url 'library:confirm_damage_sandbox' case.pk %}">
+            {% csrf_token %}
+            <input type="hidden" name="order_id" value="{{ case.sandbox_order_id }}">
+            <button type="submit" class="btn btn-outline-primary">Xác nhận thanh toán thử</button>
+          </form>
+        {% endif %}
         <details><summary>Thu tiền mặt</summary>
           <form method="post" action="?tab=loans&amp;operation=fines#fines" class="desk-action-form">
             {% csrf_token %}
