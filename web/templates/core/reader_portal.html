@@ -75,6 +75,7 @@
     <article class="list-item">
       <strong>Hồ sơ #{{ case.pk }} · {{ case.loan.copy.book.title }}</strong>
       <p>{{ case.get_kind_display }} · {{ case.get_status_display }}</p>
+      {% if case.sandbox_paid %}<p><strong>Đã thanh toán thử</strong> · VNPAY Sandbox</p>{% endif %}
       {% if case.status == 'approved' and case.replacement_amount != None or case.status == 'settled' and case.replacement_amount != None %}
         <p>Bồi thường {{ case.replacement_amount }} ₫ · Phí xử lý {{ case.processing_fee }} ₫ · <strong>Tổng {{ case.compensation_total }} ₫</strong></p>
         {% if case.status == 'approved' and case.compensation_total %}<p>Chờ thu tại quầy.</p>

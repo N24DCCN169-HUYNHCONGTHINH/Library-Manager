@@ -13,7 +13,7 @@ from django.contrib.auth import views as auth_views
 from django.core.exceptions import ObjectDoesNotExist, ValidationError
 from django.core.paginator import Paginator
 from django.db import transaction
-from django.db.models import F, Q
+from django.db.models import Exists, F, OuterRef, Q
 from django.http import HttpResponseBadRequest, HttpResponseForbidden, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
@@ -150,7 +150,7 @@ def reader_portal(request):
     summary = {}
     loan_status = request.GET.get("loan_status", "")
     if profile:
-        from apps.library.models import DamageCase, Fine, Loan, Reservation
+        from apps.library.models import DamageCase, Fine, Loan, PaymentOrder, Reservation
         from apps.library.models import LoanNotification
         loan_notifications = LoanNotification.objects.filter(loan__reader=profile, loan__status="open", due_at=F("loan__due_at")).select_related("loan__copy__book").defer('loan__copy__book__cover_image').order_by("-created_at")[:10]
         now = timezone.now()
@@ -198,7 +198,15 @@ def reader_portal(request):
                     queue = queue.filter(Q(pickup_branch__isnull=True) | Q(pickup_branch_id=reservation.pickup_branch_id))
                 reservation.queue_position = queue.count()
         fines = Paginator(own_fines, 20).get_page(request.GET.get("fine_page"))
-        own_compensation = DamageCase.objects.filter(loan__reader=profile)
+        successful_sandbox_orders = PaymentOrder.objects.filter(
+            damage_case_id=OuterRef("pk"),
+            amount=OuterRef("replacement_amount") + OuterRef("processing_fee"),
+            mode="vnpay_sandbox",
+            state="success",
+        )
+        own_compensation = DamageCase.objects.filter(loan__reader=profile).annotate(
+            sandbox_paid=Exists(successful_sandbox_orders),
+        )
         compensation_cases = Paginator(
             own_compensation.select_related("loan__copy__book").defer("loan__copy__book__cover_image")
             .order_by("-reported_at", "-pk"), 20,
