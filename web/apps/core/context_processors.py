@@ -35,7 +35,7 @@ def _bell_counts(user):
     from datetime import datetime, time, timedelta
 
     from django.contrib.auth import get_user_model
-    from django.db.models import Count, IntegerField, Subquery, Value
+    from django.db.models import Count, F, IntegerField, Subquery, Value
     from django.db.models.functions import Coalesce
     from django.utils import timezone
 
@@ -50,7 +50,10 @@ def _bell_counts(user):
         loans = loans.filter(reader__user=user)
         reservations = reservations.filter(reader__user=user)
         fines = fines.filter(loan__reader__user=user)
-        damage = damage.filter(loan__reader__user=user)
+        damage = damage.filter(
+            loan__reader__user=user,
+            replacement_amount__gt=-F("processing_fee"),
+        )
     elif not user.has_perm("library.view_reservation"):
         reservations = reservations.none()
 
@@ -62,7 +65,7 @@ def _bell_counts(user):
         grouped = rows.order_by().annotate(bucket=Value(1)).values("bucket").annotate(total=Count("pk"))
         return Coalesce(Subquery(grouped.values("total"), output_field=IntegerField()), 0)
 
-    can_see_damage = staff and (user.has_perm("library.view_damagecase") or user.has_perm("library.collect_finepayment"))
+    can_see_damage = not staff or user.has_perm("library.view_damagecase") or user.has_perm("library.collect_finepayment")
     counts = get_user_model().objects.filter(pk=user.pk).annotate(
         open_count=count_rows(loans),
         reservation_count=count_rows(reservations),

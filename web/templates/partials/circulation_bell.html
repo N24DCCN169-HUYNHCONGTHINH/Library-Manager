@@ -19,7 +19,7 @@
       <a href="{{ portal_url }}#reader-reservations">Đặt trước &amp; giữ chỗ {% include "partials/circulation_badge.html" with count=circulation_bell.reservation_count show_zero=True %}</a>
       <a href="{{ portal_url }}#reader-reminders">Nhắc hạn {% include "partials/circulation_badge.html" with count=circulation_bell.reminder_count show_zero=True %}</a>
       <a href="{{ portal_url }}?loan_status=overdue#reader-loans">Quá hạn {% include "partials/circulation_badge.html" with count=circulation_bell.overdue_count show_zero=True %}</a>
-      <a href="{{ portal_url }}#reader-fines">Khoản phạt cần trả {% include "partials/circulation_badge.html" with count=circulation_bell.fine_count show_zero=True %}</a>
+      <a href="{{ portal_url }}#reader-fines">Phạt và bồi thường cần trả {% include "partials/circulation_badge.html" with count=circulation_bell.fine_count show_zero=True %}</a>
     {% endif %}
   </div>
 </details>

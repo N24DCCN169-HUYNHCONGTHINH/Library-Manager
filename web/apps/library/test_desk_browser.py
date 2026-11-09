@@ -8,7 +8,7 @@ from django.utils import timezone
 from .test_circulation import CirculationFixtures
 from .desk_browser import desk_browser, browser_context
 from .views import circulation_desk
-from .models import BookCopy, Loan, Fine
+from .models import BookCopy, DamageCase, Loan, Fine
 from .services import checkout_copy
 
 class DeskBrowserTests(CirculationFixtures,TestCase):
@@ -81,3 +81,15 @@ class DeskBrowserTests(CirculationFixtures,TestCase):
         response = circulation_desk(self.request({"tab": "loans", "operation": "overdue"}))
         self.assertContains(response, 'aria-label="Theo dõi nghiệp vụ, tổng 2 mục"')
         self.assertContains(response, 'operation=overdue#overdue">Quá hạn <span class="circulation-bell-count">1</span>', count=1)
+
+    def test_reader_bell_counts_own_payable_compensation(self):
+        from apps.core.context_processors import _bell_counts
+
+        loan = checkout_copy("a", "COPY-1", self.staff)
+        for amount, fee in [(70000, 5000), (0, 2000), (0, 0)]:
+            DamageCase.objects.create(
+                loan=loan, kind=DamageCase.Kind.LOST, status=DamageCase.Status.APPROVED,
+                replacement_amount=amount, processing_fee=fee, created_by=self.staff,
+            )
+        self.assertEqual(_bell_counts(self.a.user)["fine_count"], 2)
+        self.assertEqual(_bell_counts(self.b.user)["fine_count"], 0)
