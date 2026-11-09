@@ -15,11 +15,11 @@
       <a href="{{ desk_url }}?tab=loans&amp;operation=fines#fines">Khoản phạt cần thu {% include "partials/circulation_badge.html" with count=circulation_bell.fine_count %}</a>
     {% else %}
       {% url 'reader_portal' as portal_url %}
-      <a href="{{ portal_url }}?loan_status=open#reader-loans">Lượt mượn đang mở {% include "partials/circulation_badge.html" with count=circulation_bell.open_count %}</a>
-      <a href="{{ portal_url }}#reader-reservations">Đặt trước &amp; giữ chỗ {% include "partials/circulation_badge.html" with count=circulation_bell.reservation_count %}</a>
-      <a href="{{ portal_url }}#reader-reminders">Nhắc hạn {% include "partials/circulation_badge.html" with count=circulation_bell.reminder_count %}</a>
-      <a href="{{ portal_url }}?loan_status=overdue#reader-loans">Quá hạn {% include "partials/circulation_badge.html" with count=circulation_bell.overdue_count %}</a>
-      <a href="{{ portal_url }}#reader-fines">Khoản phạt cần trả {% include "partials/circulation_badge.html" with count=circulation_bell.fine_count %}</a>
+      <a href="{{ portal_url }}?loan_status=open#reader-loans">Lượt mượn đang mở {% include "partials/circulation_badge.html" with count=circulation_bell.open_count show_zero=True %}</a>
+      <a href="{{ portal_url }}#reader-reservations">Đặt trước &amp; giữ chỗ {% include "partials/circulation_badge.html" with count=circulation_bell.reservation_count show_zero=True %}</a>
+      <a href="{{ portal_url }}#reader-reminders">Nhắc hạn {% include "partials/circulation_badge.html" with count=circulation_bell.reminder_count show_zero=True %}</a>
+      <a href="{{ portal_url }}?loan_status=overdue#reader-loans">Quá hạn {% include "partials/circulation_badge.html" with count=circulation_bell.overdue_count show_zero=True %}</a>
+      <a href="{{ portal_url }}#reader-fines">Khoản phạt cần trả {% include "partials/circulation_badge.html" with count=circulation_bell.fine_count show_zero=True %}</a>
     {% endif %}
   </div>
 </details>

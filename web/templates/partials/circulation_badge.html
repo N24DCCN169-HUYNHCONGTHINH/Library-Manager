@@ -1,1 +1,1 @@
-{% if count %}<span class="circulation-bell-count">{{ count }}</span>{% endif %}
+{% if count or show_zero %}<span class="circulation-bell-count">{{ count|default_if_none:0 }}</span>{% endif %}
