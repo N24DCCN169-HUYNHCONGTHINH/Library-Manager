@@ -328,7 +328,7 @@ def email_change_confirm(request, token):
         "form": form, "valid_link": verification is not None,
         "confirmed": confirmed, "needs_staff_mfa": needs_staff_mfa,
     })
-    response["Referrer-Policy"] = "no-referrer"
+    response["Referrer-Policy"] = "strict-origin"
     return response
 
 
