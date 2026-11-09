@@ -54,6 +54,22 @@
   </details>
 {% endif %}
 
+{% if case.status == 'approved' or case.status == 'settled' %}
+  {% if case.replacement_amount != None %}
+    <div>
+      <strong>Mức bồi thường đã duyệt</strong>
+      <p>Bồi thường {{ case.replacement_amount }} ₫ · Phí xử lý {{ case.processing_fee }} ₫ · Tổng <strong>{{ case.compensation_total }} ₫</strong></p>
+      {% if case.approved_at %}<p>Duyệt lúc {{ case.approved_at|date:"d/m/Y H:i" }}{% if case.approved_by %} · {{ case.approved_by.get_full_name|default:case.approved_by.username }}{% endif %}</p>{% endif %}
+      {% if case.decision_reason %}<p>Căn cứ: {{ case.decision_reason }}</p>{% endif %}
+      {% if case.status == 'approved' and case.compensation_total %}
+        <a href="?tab=loans&amp;operation=fines&amp;loan_q=%23{{ case.loan_id }}#fines">Mở Khoản phạt để thu bồi thường</a>
+      {% endif %}
+    </div>
+  {% endif %}
+{% elif case.status == 'open' or case.status == 'contested' %}
+  {% if not perms.library.approve_damagecase %}<p>Hồ sơ đang chờ người có quyền duyệt bồi thường.</p>{% endif %}
+{% endif %}
+
 {% if perms.library.approve_damagecase %}
   {% if case.status == 'open' or case.status == 'contested' or case.status == 'approved' and not case.compensation_total %}
     <details>

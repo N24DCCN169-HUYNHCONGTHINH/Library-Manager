@@ -5,11 +5,11 @@
   if (!endpoint) return;
   const desk = document.getElementById('desk-workspace');
   if (desk) {
-    const legacy = {return:'loans','open-loans':'loans',reservations:'reservations',fines:'fines'};
+    const legacy = {return:'loans','open-loans':'loans',reservations:'reservations'};
     const panels = [...desk.querySelectorAll('[data-desk-panel]')];
     const activate = (name, push=false) => {
       if (name === 'return') name = 'loans';
-      if (!panels.some(panel => panel.dataset.deskPanel === name)) name = 'checkout';
+      if (!panels.some(panel => panel.dataset.deskPanel === name)) name = panels[0]?.dataset.deskPanel;
       panels.forEach(panel => { panel.hidden = panel.dataset.deskPanel !== name; });
       document.querySelectorAll('[data-desk-tab]').forEach(link => {
         if (link.dataset.deskTab === name) link.setAttribute('aria-current','page'); else link.removeAttribute('aria-current');
@@ -23,7 +23,7 @@
     activate(legacy[location.hash.slice(1)] || desk.dataset.activeTab);
     document.querySelectorAll('[data-desk-tab]').forEach(link => link.addEventListener('click',event => {
       if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
-      if (!panels.some(panel => panel.dataset.deskPanel === link.dataset.deskTab)) return;
+      if (!panels.some(panel => panel.dataset.deskPanel === link.dataset.deskTab) || link.dataset.deskTab === desk.dataset.activeTab) return;
       event.preventDefault();
       const change = () => {
         activate(link.dataset.deskTab,true);

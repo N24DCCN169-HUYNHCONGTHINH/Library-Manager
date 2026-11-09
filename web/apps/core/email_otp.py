@@ -35,7 +35,9 @@ def send_code(request):
     code=f"{secrets.randbelow(1000000):06d}"
     challenge=EmailLoginChallenge(user=user,email=user.email,session_digest=digest(request.session.session_key),expires_at=now+timedelta(minutes=5))
     challenge.code_digest=digest(f"{challenge.pk}:{code}")
-    _send_mail("Library Hub — Mã xác minh đăng nhập",f"Mã OTP đăng nhập: {code}. Mã có hiệu lực 5 phút và chỉ dùng một lần. Không chia sẻ mã này. Nếu không phải bạn đăng nhập, hãy đổi mật khẩu.",recipient=user.email,fail_silently=False)
+    sent = _send_mail("Library Hub — Mã xác minh đăng nhập",f"Mã OTP đăng nhập: {code}. Mã có hiệu lực 5 phút và chỉ dùng một lần. Không chia sẻ mã này. Nếu không phải bạn đăng nhập, hãy đổi mật khẩu.",recipient=user.email,fail_silently=False)
+    if sent != 1:
+        raise ValidationError("Chưa gửi được mã OTP. Vui lòng thử lại.")
     EmailLoginChallenge.objects.filter(user=user,consumed_at__isnull=True).update(consumed_at=now)
     challenge.save();request.session["email_otp_challenge"]=str(challenge.pk)
     return challenge

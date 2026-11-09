@@ -94,6 +94,8 @@ class Day11Regressions(CirculationFixtures, TestCase):
         data = {"action": "payment", "fine_id": fine.pk, "amount": 2000, "reason": "Thu thử", "idempotency_key": uuid4()}
         for _ in range(2):
             response = self.client.post(reverse("library:circulation_desk"), data, follow=True)
+            self.assertRedirects(response, reverse("library:circulation_desk") + "?tab=loans&operation=fines#fines")
+            self.assertContains(response, 'id="fines" open', html=False)
             self.assertContains(response, "Đã ghi nhận thanh toán")
         self.assertEqual(fine.transactions.count(), 1)
 

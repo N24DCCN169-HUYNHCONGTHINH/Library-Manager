@@ -33,6 +33,5 @@ STORAGES = {
     "default": {"BACKEND": "django.core.files.storage.FileSystemStorage"},
     "staticfiles": {"BACKEND": "whitenoise.storage.CompressedStaticFilesStorage"},
 }
-RESEND_API_KEY = os.environ.get("RESEND_API_KEY", "").strip()
 if EMAIL_BACKEND != "apps.core.email_backend.ResendEmailBackend" or not RESEND_API_KEY:  # noqa: F405
     raise ImproperlyConfigured("Render requires the Resend HTTPS backend and RESEND_API_KEY.")

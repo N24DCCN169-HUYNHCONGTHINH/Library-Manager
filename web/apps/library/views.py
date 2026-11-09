@@ -219,7 +219,8 @@ def circulation_desk(request):
                         damage_approval_form.add_error(None, str(exc) if isinstance(exc, CirculationError) else "Không tìm thấy hồ sơ mất/hỏng.")
                     else:
                         messages.success(request, "Đã duyệt mức bồi thường.")
-                        return redirect(reverse("library:circulation_desk") + "?tab=loans&operation=damage#damage")
+                        case_id = damage_approval_form.cleaned_data["case_id"]
+                        return redirect(reverse("library:circulation_desk") + f"?tab=loans&operation=damage&case={case_id}#damage-case-{case_id}")
             elif action == "update_copy_condition":
                 case_id = request.POST.get("case_id", "")
                 if not case_id.isascii() or not case_id.isdecimal() or len(case_id) > 18:
@@ -373,7 +374,7 @@ def circulation_desk(request):
     reservations = Reservation.objects.select_related("reader", "book", "copy__branch", "pickup_branch", "notification").defer('book__cover_image').filter(status__in=[Reservation.Status.WAITING, Reservation.Status.READY]).order_by("created_at", "pk")[:50]
     damage_case_query = request.GET.get("case", "")
     selected_damage_case = int(damage_case_query) if damage_case_query.isascii() and damage_case_query.isdecimal() and len(damage_case_query) <= 18 else None
-    damage_cases = DamageCase.objects.select_related("loan__copy__book", "loan__reader").defer(
+    damage_cases = DamageCase.objects.select_related("loan__copy__book", "loan__reader", "approved_by").defer(
         "loan__copy__book__cover_image"
     ).annotate(latest_case_id=Subquery(
         DamageCase.objects.filter(loan__copy_id=OuterRef("loan__copy_id")).order_by("-pk").values("pk")[:1]
