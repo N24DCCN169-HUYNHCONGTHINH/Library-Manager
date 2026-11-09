@@ -1,3 +1,29 @@
 {% extends "base.html" %}
-{% block title %}Xác nhận email mới{% endblock %}
-{% block content %}<section class="card"><h1>Xác nhận đổi email</h1><p>Để bảo vệ tài khoản, hãy đăng nhập đúng tài khoản đã yêu cầu đổi email rồi xác nhận tại đây.</p><form method="post">{% csrf_token %}{{ form.as_p }}<button type="submit">Xác nhận email mới</button></form></section>{% endblock %}
+{% block title %}Xác nhận đổi email · Library Hub{% endblock %}
+{% block content %}
+<section class="card personal-card" aria-labelledby="confirm-email-title">
+  <span class="eyebrow">BẢO MẬT TÀI KHOẢN</span>
+  {% if confirmed %}
+    <h1 id="confirm-email-title">Đã xác nhận email mới</h1>
+    <p>Email tài khoản của bạn đã được cập nhật và xác minh.</p>
+    <a class="btn btn-primary" href="{% url 'home' %}">Về trang chủ</a>
+  {% elif not valid_link %}
+    <h1 id="confirm-email-title">Liên kết không còn hiệu lực</h1>
+    <p>Liên kết có thể đã được dùng hoặc đã hết hạn. Bạn có thể tạo yêu cầu mới trong tài khoản.</p>
+    <a class="btn btn-outline-primary" href="{% url 'email_change_request' %}">Yêu cầu đổi email mới</a>
+  {% else %}
+    <h1 id="confirm-email-title">Xác nhận đổi email</h1>
+    {% if needs_staff_mfa %}
+      <p>Hãy xác thực tài khoản nhân viên đã yêu cầu đổi email, sau đó mở lại liên kết trong Gmail.</p>
+      <a class="btn btn-primary" href="{% url 'login' %}">Xác thực tài khoản nhân viên</a>
+    {% else %}
+      <p>Bấm xác nhận để dùng địa chỉ email mới cho tài khoản Library Hub.</p>
+      <form method="post">
+        {% csrf_token %}
+        {{ form.as_p }}
+        <button class="btn btn-primary" type="submit">Xác nhận email mới</button>
+      </form>
+    {% endif %}
+  {% endif %}
+</section>
+{% endblock %}

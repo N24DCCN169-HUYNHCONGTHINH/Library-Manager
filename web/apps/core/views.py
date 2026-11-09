@@ -292,20 +292,44 @@ def email_change_request(request):
     return render(request, "registration/email_change_form.html", {"form": form})
 
 
-@login_required
 @never_cache
 def email_change_confirm(request, token):
-    if has_staff_role(request.user) and not request.user.is_verified():
-        return redirect("otp_verify" if TOTPDevice.objects.filter(user=request.user, confirmed=True).exists() else "otp_setup")
-    form = forms.Form(request.POST or None)
-    if request.method == "POST":
-        try:
-            verification = confirm_email_change(token, request.user)
-            messages.success(request, f"Email tài khoản đã được đổi và xác minh: {verification.pending_email}.")
-            return redirect("home")
-        except ValidationError as exc:
-            form.add_error(None, exc)
-    return render(request, "registration/email_change_confirm.html", {"form": form})
+    from .models import EmailChangeVerification
+
+    verification = EmailChangeVerification.objects.select_related("user").filter(
+        token_digest=digest_token(token), confirmed_at__isnull=True,
+        revoked_at__isnull=True, expires_at__gt=timezone.now(), user__is_active=True,
+    ).first()
+    form = forms.Form(request.POST if request.method == "POST" else None)
+    confirmed = False
+    needs_staff_mfa = False
+    if verification:
+        owner = verification.user
+        same_account = request.user == owner
+        needs_staff_mfa = has_staff_role(owner) and not (
+            same_account and request.user.is_verified()
+        )
+        if not same_account and not needs_staff_mfa:
+            form.fields["current_password"] = forms.CharField(
+                label="Mật khẩu hiện tại", strip=False,
+                widget=forms.PasswordInput(attrs={"autocomplete": "current-password"}),
+            )
+        if request.method == "POST" and not needs_staff_mfa and form.is_valid():
+            if not same_account and not owner.check_password(form.cleaned_data["current_password"]):
+                form.add_error("current_password", "Mật khẩu không đúng.")
+            else:
+                try:
+                    confirm_email_change(token, owner)
+                except ValidationError as exc:
+                    form.add_error(None, exc)
+                else:
+                    confirmed = True
+    response = render(request, "registration/email_change_confirm.html", {
+        "form": form, "valid_link": verification is not None,
+        "confirmed": confirmed, "needs_staff_mfa": needs_staff_mfa,
+    })
+    response["Referrer-Policy"] = "no-referrer"
+    return response
 
 
 @never_cache
