@@ -9,7 +9,7 @@
     <a class="btn btn-primary" href="{% if user.is_authenticated %}{% url 'profile' %}{% else %}{% url 'home' %}{% endif %}">Tiếp tục</a>
   {% elif not valid_link %}
     <h1 id="confirm-email-title">Liên kết không còn hiệu lực</h1>
-    <p>Liên kết có thể đã được dùng hoặc đã hết hạn. Bạn có thể tạo yêu cầu mới trong tài khoản.</p>
+    <p>Liên kết có thể đã được dùng hoặc đã hết hạn. Hãy tạo yêu cầu mới trong mục Email &amp; bảo mật của tài khoản.</p>
     <a class="btn btn-outline-primary" href="{% url 'email_change_request' %}">Yêu cầu đổi email mới</a>
   {% else %}
     <h1 id="confirm-email-title">Xác nhận đổi email</h1>
