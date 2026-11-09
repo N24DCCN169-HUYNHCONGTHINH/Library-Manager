@@ -1,1 +1,82 @@
-<div class="table-wrap"><table class="list-table"><thead><tr><th>Phiếu / độc giả</th><th>Tài liệu</th><th>Hạn trả</th><th>Thao tác</th></tr></thead><tbody>{% for loan in rows %}<tr data-open-url="{% url 'library:staff_loan_detail' loan.pk %}"><td><a href="{% url 'library:staff_loan_detail' loan.pk %}"><strong>Phiếu #{{ loan.pk }}</strong></a><small>{{ loan.reader.reader_number }}</small></td><td><strong>{{ loan.copy.book.title }}</strong><small>{{ loan.copy.barcode }}</small></td><td>{{ loan.due_at|date:"d/m/Y H:i" }}<small>Gia hạn {{ loan.renewal_count }} lần</small>{% if loan.return_requested %}<span class="badge bg-orange-lt">Độc giả yêu cầu trả</span>{% endif %}{% if loan.long_overdue_review_at %}<span class="badge bg-orange-lt">Chạm trần phạt · Cần xem xét</span>{% endif %}</td><td><a class="btn btn-sm btn-outline-primary" href="{% url 'library:staff_loan_detail' loan.pk %}">Xem phiếu →</a></td></tr>{% empty %}<tr><td colspan="4" class="empty-state">Không có lượt mượn phù hợp.</td></tr>{% endfor %}</tbody></table></div>
+<div class="table-wrap loan-table-wrap"><table class="list-table loan-table" role="table"><thead role="rowgroup"><tr role="row"><th scope="col" role="columnheader">Phiếu / độc giả</th><th scope="col" role="columnheader">Tài liệu</th><th scope="col" role="columnheader">Trạng thái</th><th scope="col" role="columnheader">Tình trạng sách</th><th scope="col" role="columnheader">Hạn trả</th><th scope="col" role="columnheader">Thao tác</th></tr></thead><tbody role="rowgroup">{% for loan in rows %}<tr role="row" data-open-url="{% url 'library:staff_loan_detail' loan.pk %}"><td role="cell" data-label="Phiếu / độc giả"><a href="{% url 'library:staff_loan_detail' loan.pk %}"><strong>Phiếu #{{ loan.pk }}</strong></a><small>{{ loan.reader.user.get_full_name|default:loan.reader.user.username }} · {{ loan.reader.reader_number }}</small></td><td role="cell" data-label="Tài liệu"><strong>{{ loan.copy.book.title }}</strong><small>{{ loan.copy.barcode }}</small></td><td role="cell" data-label="Trạng thái">{% if loan.status == 'open' and loan.due_at < loan_now %}
+  <a class="badge loan-status-badge loan-status-overdue" href="?tab=loans&amp;operation=overdue#overdue">Quá hạn</a>
+  <small>Quá hạn từ {{ loan.due_at|date:"d/m/Y H:i:s" }}</small>
+  <small>Đã trễ {{ loan.due_at|timesince:loan_now }}</small>
+{% elif loan.status == 'open' %}
+  {% if loan.due_at < loan_reminder_end %}
+    <a class="badge loan-status-badge loan-status-reminder" href="?tab=loans&amp;operation=notices#notices">Sắp đến hạn</a>
+  {% else %}
+    {% if perms.library.renew_loan %}
+      <a class="badge loan-status-badge loan-status-open" href="?tab=loans&amp;operation=renew&amp;loan={{ loan.pk }}#renew" title="Mở gia hạn cho phiếu này">Đang mượn</a>
+    {% else %}<span class="badge loan-status-badge loan-status-open">Đang mượn</span>{% endif %}
+  {% endif %}
+{% elif loan.status == 'returned' %}
+  {% with condition=loan.reported_condition|default:loan.returned_condition %}
+    {% if condition == 'minor_damage' or condition == 'major_damage' %}
+      {% if perms.library.view_damagecase and loan.damage_case_id %}
+        <a class="badge loan-status-badge loan-status-damaged" href="?tab=loans&amp;operation=damage&amp;case={{ loan.damage_case_id }}#damage-case-{{ loan.damage_case_id }}">Đã trả · Hư hỏng</a>
+      {% else %}<span class="badge loan-status-badge loan-status-damaged">Đã trả · Hư hỏng</span>{% endif %}
+    {% else %}
+      <span class="badge loan-status-badge loan-status-returned">Đã trả</span>
+    {% endif %}
+  {% endwith %}
+{% else %}
+  {% if loan.status == 'lost' and perms.library.view_damagecase and loan.damage_case_id %}
+    <a class="badge bg-secondary-lt" href="?tab=loans&amp;operation=damage&amp;case={{ loan.damage_case_id }}#damage-case-{{ loan.damage_case_id }}">{{ loan.get_status_display }}</a>
+  {% else %}<span class="badge bg-secondary-lt">{{ loan.get_status_display }}</span>{% endif %}
+{% endif %}
+{% if loan.returned_at %}
+  <small>Trả lúc {{ loan.returned_at|date:"d/m/Y H:i:s" }}</small>
+  {% if loan.returned_at > loan.due_at %}<small>Trả trễ {{ loan.due_at|timesince:loan.returned_at }}</small>{% endif %}
+{% endif %}</td><td role="cell" data-label="Tình trạng sách">
+{% with condition=loan.reported_condition|default:loan.returned_condition %}
+  {% if loan.status == 'lost' or condition == 'lost' %}Đã báo mất
+  {% elif condition == 'major_damage' %}Hư hỏng nặng
+  {% elif condition == 'minor_damage' %}Hư hỏng nhẹ
+  {% elif condition == 'normal_wear' %}Bình thường / hao mòn tự nhiên
+  {% elif loan.status == 'open' %}Chưa kiểm tra khi trả
+  {% else %}Chưa ghi nhận
+  {% endif %}
+{% endwith %}
+{% if loan.condition_description %}<small>{{ loan.condition_description }}</small>{% endif %}
+{% if loan.compensation_status and perms.library.collect_finepayment or loan.compensation_status and perms.library.view_damagecase %}
+  <small>Bồi thường {{ loan.compensation_amount }} ₫ · {% if loan.compensation_status == 'settled' %}Đã hoàn tất{% else %}<a href="?tab=loans&amp;operation=fines#fines">Chờ thu</a>{% endif %}</small>
+{% endif %}
+</td><td role="cell" data-label="Hạn trả">{{ loan.due_at|date:"d/m/Y H:i:s" }}<small>Gia hạn {{ loan.renewal_count }} lần</small>{% if loan.status == 'open' and loan.return_requested %}<span class="badge bg-orange-lt">Độc giả yêu cầu trả</span>{% endif %}{% if loan.long_overdue_review_at %}<span class="badge bg-orange-lt">Chạm trần phạt · Cần xem xét</span>{% endif %}</td><td role="cell" data-label="Thao tác"><div class="loan-row-actions"><a class="btn btn-sm btn-outline-primary" href="{% url 'library:staff_loan_detail' loan.pk %}">Xem phiếu →</a>
+{% if perms.library.renew_loan and loan.status == 'open' and loan.due_at >= loan_now %}
+  <a class="btn btn-sm btn-outline-primary loan-action-color loan-status-open" href="?tab=loans&amp;operation=renew&amp;loan={{ loan.pk }}#renew">Gia hạn</a>
+{% endif %}
+{% if perms.library.view_damagecase and loan.damage_case_id %}
+  <a class="btn btn-sm btn-outline-primary loan-action-color loan-status-damaged" href="?tab=loans&amp;operation=damage&amp;case={{ loan.damage_case_id }}#damage-case-{{ loan.damage_case_id }}">Mất / hỏng</a>
+{% endif %}
+{% if loan.status == 'open' %}
+  {% if loan.due_at < loan_now %}
+    <a class="btn btn-sm btn-outline-primary loan-action-color loan-status-overdue" href="?tab=loans&amp;operation=overdue&amp;loan_q=%23{{ loan.pk }}#overdue">Quá hạn</a>
+  {% elif loan.due_at < loan_reminder_end %}
+    <a class="btn btn-sm btn-outline-primary loan-action-color loan-status-reminder" href="?tab=loans&amp;operation=notices&amp;loan_q=%23{{ loan.pk }}#notices">Nhắc hạn</a>
+  {% endif %}
+{% endif %}
+{% if loan.has_due_fine or loan.compensation_status == 'approved' and perms.library.collect_finepayment or loan.compensation_status == 'approved' and perms.library.view_damagecase %}
+  <a class="btn btn-sm btn-outline-primary loan-action-color loan-status-overdue" href="?tab=loans&amp;operation=fines&amp;loan_q=%23{{ loan.pk }}#fines">Khoản phạt</a>
+{% endif %}
+{% if allow_return and perms.library.return_loan and loan.status == 'open' %}
+  {% if not link_return_only and return_form.barcode.value == loan.copy.barcode %}
+    <div id="return">{% include "library/partials/loan_return_form.html" %}</div>
+  {% else %}
+    <a class="btn btn-sm btn-primary" href="?tab=loans&amp;loan_q=%23{{ loan.pk }}&amp;barcode={{ loan.copy.barcode|urlencode }}#return">Nhận trả</a>
+  {% endif %}
+{% endif %}
+{% if allow_return and perms.library.return_loan and loan.status == 'open' %}
+  <details>
+    <summary>Báo mất</summary>
+    <form method="post" action="?tab=loans&amp;loan_q=%23{{ loan.pk }}" class="desk-action-form">
+      {% csrf_token %}
+      <input type="hidden" name="action" value="report_lost">
+      <input type="hidden" name="loan_id" value="{{ loan.pk }}">
+      <label for="lost-reason-{{ loan.pk }}">Lý do báo mất</label>
+      <textarea id="lost-reason-{{ loan.pk }}" name="reason" maxlength="500" rows="2" required></textarea>
+      <button type="submit">Xác nhận báo mất</button>
+    </form>
+  </details>
+{% endif %}
+</div></td></tr>{% empty %}<tr role="row"><td role="cell" colspan="6" class="empty-state">Không có lượt mượn phù hợp.</td></tr>{% endfor %}</tbody></table></div>

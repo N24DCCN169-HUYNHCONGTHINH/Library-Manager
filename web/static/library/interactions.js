@@ -5,14 +5,10 @@
   if (!endpoint) return;
   const desk = document.getElementById('desk-workspace');
   if (desk) {
-    desk.addEventListener('dblclick', event => {
-      if (event.target.closest('button, a, input, form')) return;
-      const form = event.target.closest('#reservation-results tr')?.querySelector('[data-reservation-pickup]');
-      if (form) form.requestSubmit();
-    });
-    const legacy = {'open-loans':'loans',reservations:'reservations',fines:'fines'};
+    const legacy = {return:'loans','open-loans':'loans',reservations:'reservations',fines:'fines'};
     const panels = [...desk.querySelectorAll('[data-desk-panel]')];
     const activate = (name, push=false) => {
+      if (name === 'return') name = 'loans';
       if (!panels.some(panel => panel.dataset.deskPanel === name)) name = 'checkout';
       panels.forEach(panel => { panel.hidden = panel.dataset.deskPanel !== name; });
       document.querySelectorAll('[data-desk-tab]').forEach(link => {
@@ -27,6 +23,7 @@
     activate(legacy[location.hash.slice(1)] || desk.dataset.activeTab);
     document.querySelectorAll('[data-desk-tab]').forEach(link => link.addEventListener('click',event => {
       if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+      if (!panels.some(panel => panel.dataset.deskPanel === link.dataset.deskTab)) return;
       event.preventDefault();
       const change = () => {
         activate(link.dataset.deskTab,true);
@@ -78,23 +75,26 @@
         const url = new URL(row.url, location.origin);
         if (url.origin === location.origin) location.assign(url.href);
       } else {
-        input.value = row.value; input.dispatchEvent(new Event('change', {bubbles: true}));
+        input.value = input.dataset.lookupMode === 'filter' ? (row.search_value || row.value) : row.value; input.dispatchEvent(new Event('change', {bubbles: true}));
         close(); input.focus({preventScroll:true}); status.textContent = `Đã chọn: ${row.label} · ${row.detail}`;
       }
     };
     input.addEventListener('input', () => {
       clearTimeout(timer); controller?.abort(); const revision = ++version; close();
       const q = input.value.trim();
-      if (q.length < 2 && !(/^[0-9]+$/.test(q) && ['loans', 'fines'].includes(input.dataset.lookup))) { status.textContent = ''; return; }
+      if (!q) { status.textContent = ''; return; }
       timer = setTimeout(async () => {
         controller = new AbortController(); status.textContent = 'Đang tìm…';
         try {
           const url = new URL(endpoint, location.origin);
           url.search = new URLSearchParams({kind: input.dataset.lookup, q});
-          ['branch', 'status'].forEach(name => {
+          ['branch', 'status', 'role', 'archived'].forEach(name => {
             const field = input.form?.elements.namedItem(name);
             if (field?.value) url.searchParams.set(name, field.value);
           });
+          if (input.dataset.lookup === 'copies' && input.form?.elements.desk_status?.value) {
+            url.searchParams.set('copy_status', input.form.elements.desk_status.value);
+          }
           const response = await fetch(url, {signal: controller.signal, credentials: 'same-origin', headers: {Accept: 'application/json'}});
           if (!response.ok) throw new Error('lookup');
           const data = await response.json();
@@ -131,7 +131,7 @@
     row.classList.add('entity-openable');
     row.addEventListener('dblclick', event => {
       if (event.target.closest('a,button,input,select,textarea,summary')) return;
-      const url = new URL(row.dataset.openUrl, location.origin);
+      const url = new URL(row.dataset.openUrl, location.href);
       if (url.origin === location.origin) location.assign(url.href);
     });
   });
@@ -152,3 +152,53 @@
     }));
   }
 })();
+
+(() => {
+  const button = document.querySelector('[data-reader-profile-pin]');
+  if (!button) return;
+  const layout = button.closest('.reader-detail-with-history');
+  const label = button.querySelector('[data-reader-pin-label]');
+  const storageKey = 'library-reader-profile-pinned';
+  const header = button.closest('.reader-profile-sticky');
+  const measureHeader = () => layout.style.setProperty(
+    '--reader-profile-header-height', header.offsetHeight + 'px',
+  );
+  if (window.ResizeObserver) new ResizeObserver(measureHeader).observe(header);
+
+  const showPinned = pinned => {
+    layout.classList.toggle('reader-profile-unpinned', !pinned);
+    button.setAttribute('aria-pressed', String(pinned));
+    button.title = pinned ? 'Bỏ ghim hồ sơ' : 'Ghim hồ sơ';
+    label.textContent = pinned ? 'Bỏ ghim' : 'Ghim';
+  };
+
+  let pinned = true;
+  try { pinned = localStorage.getItem(storageKey) !== 'false'; } catch (_) { /* storage optional */ }
+  showPinned(pinned);
+  button.hidden = false;
+  measureHeader();
+  button.addEventListener('click', () => {
+    pinned = !pinned;
+    showPinned(pinned);
+    try { localStorage.setItem(storageKey, String(pinned)); } catch (_) { /* storage optional */ }
+  });
+})();
+
+
+document.querySelectorAll('[data-account-bulk]').forEach(form => {
+  const all = form.querySelector('[data-account-select-all]');
+  const choices = [...form.querySelectorAll('input[name="account_id"]')];
+  const update = () => {
+    const count = choices.filter(choice => choice.checked).length;
+    all.disabled = !choices.length;
+    all.checked = count > 0 && count === choices.length;
+    all.indeterminate = count > 0 && count < choices.length;
+    form.querySelector('button[type="submit"]').disabled = !count;
+  };
+  all.addEventListener('change', () => {
+    choices.forEach(choice => { choice.checked = all.checked; });
+    update();
+  });
+  choices.forEach(choice => choice.addEventListener('change', update));
+  update();
+});

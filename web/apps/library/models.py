@@ -291,6 +291,9 @@ class Reservation(models.Model):
 
     reader = models.ForeignKey(ReaderProfile, on_delete=models.PROTECT, related_name="reservations")
     book = models.ForeignKey(Book, on_delete=models.PROTECT, related_name="reservations")
+    pickup_branch = models.ForeignKey(LibraryBranch, null=True, blank=True, on_delete=models.PROTECT)
+    requested_loan_days = models.PositiveSmallIntegerField(null=True, blank=True)
+    requested_duration_seconds = models.PositiveBigIntegerField(null=True, blank=True)
     copy = models.ForeignKey(BookCopy, null=True, blank=True, on_delete=models.PROTECT, related_name="reservations")
     status = models.CharField(max_length=16, choices=Status.choices, default=Status.WAITING, db_index=True)
     created_at = models.DateTimeField(auto_now_add=True)
@@ -308,6 +311,18 @@ class Reservation(models.Model):
         ]
         indexes = [models.Index(fields=["book", "status", "created_at"])]
         permissions = [("manage_reservation", "Can manage reader reservations")]
+
+    @property
+    def requested_duration_label(self):
+        if self.requested_duration_seconds:
+            days, seconds = divmod(self.requested_duration_seconds, 86400)
+            hours, seconds = divmod(seconds, 3600)
+            minutes, seconds = divmod(seconds, 60)
+            return " ".join(
+                f"{value} {unit}" for value, unit in
+                ((days, "ngày"), (hours, "giờ"), (minutes, "phút"), (seconds, "giây")) if value
+            )
+        return f"{self.requested_loan_days} ngày" if self.requested_loan_days else ""
 
 
 class ReservationNotification(models.Model):
@@ -401,6 +416,10 @@ class DamageCase(models.Model):
     approved_at = models.DateTimeField(null=True, blank=True)
     settled_at = models.DateTimeField(null=True, blank=True)
 
+    @property
+    def compensation_total(self):
+        return (self.replacement_amount or 0) + self.processing_fee
+
     class Meta:
         ordering = ["-reported_at"]
         permissions = [("approve_damagecase", "Can approve damage and replacement amounts")]
@@ -439,10 +458,11 @@ class PaymentOrder(models.Model):
     import uuid
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     requester = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="payment_orders")
-    fine = models.ForeignKey(Fine, on_delete=models.PROTECT, related_name="payment_orders")
+    fine = models.ForeignKey(Fine, on_delete=models.PROTECT, related_name="payment_orders", null=True, blank=True)
+    damage_case = models.ForeignKey(DamageCase, on_delete=models.PROTECT, null=True, blank=True, related_name="payment_orders")
     channel = models.CharField(max_length=12, choices=[("bank", "Ngân hàng"), ("momo", "MoMo")])
     mode = models.CharField(max_length=20, choices=[("simulator", "Mô phỏng nội bộ"), ("momo_sandbox", "MoMo Sandbox"), ("vnpay_sandbox", "VNPAY Sandbox")], default="simulator")
-    amount = models.DecimalField(max_digits=10, decimal_places=0, validators=[MinValueValidator(1)])
+    amount = models.DecimalField(max_digits=13, decimal_places=0, validators=[MinValueValidator(1)])
     state = models.CharField(max_length=12, choices=[("pending", "Chờ thanh toán thử"), ("success", "Thành công — giao dịch thử"), ("failed", "Thất bại"), ("cancelled", "Đã hủy"), ("expired", "Hết hạn")], default="pending")
     request_key = models.UUIDField(unique=True)
     provider_transaction = models.CharField(max_length=100, null=True, blank=True, unique=True)
@@ -453,6 +473,11 @@ class PaymentOrder(models.Model):
     provider_pay_url = models.URLField(max_length=1500, blank=True)
     class Meta:
         ordering = ["-created_at"]
+        constraints = [models.CheckConstraint(
+            condition=Q(fine__isnull=False, damage_case__isnull=True)
+            | Q(fine__isnull=True, damage_case__isnull=False, mode="vnpay_sandbox", channel="bank"),
+            name="payment_order_single_subject",
+        )]
 
 class FineWaiverRequest(models.Model):
     request_key = models.UUIDField(default=uuid.uuid4, unique=True)

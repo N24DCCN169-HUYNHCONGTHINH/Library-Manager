@@ -1,0 +1,56 @@
+{% extends "base.html" %}
+{% block title %}Tổng quan quản trị · Library Hub{% endblock %}
+{% block content %}
+<div class="page-intro">
+  <div>
+    <div class="eyebrow">KHÔNG GIAN QUẢN TRỊ</div>
+    <h1>Tổng quan quản trị</h1>
+    <p class="muted">Quản lý tài khoản, quyền truy cập và vận hành Library Hub.</p>
+  </div>
+  <div class="d-flex flex-wrap gap-2">
+    <a class="btn btn-primary" href="#admin-backup">Sao lưu và phục hồi</a>
+  {% if perms.library.view_loan or perms.library.view_bookcopy %}
+    <a class="btn btn-outline-primary" href="{% url 'staff_dashboard' %}?view=library">Tổng quan thư viện</a>
+  {% endif %}
+  </div>
+</div>
+{% for message in messages %}<p role="status">{{ message }}</p>{% endfor %}
+<section aria-labelledby="admin-shortcuts">
+  <h2 id="admin-shortcuts" class="dashboard-shortcut-title">Truy cập nhanh</h2>
+  <div class="quick-grid">
+    {% if perms.auth.view_user %}
+      <a class="card quick-card" href="{% url 'account_list' %}"><strong>Tài khoản và phân quyền</strong><span class="muted">Tìm tài khoản, kiểm tra trạng thái và quản lý vai trò.</span></a>
+    {% endif %}
+    {% if perms.core.issue_account_invitation %}
+      <a class="card quick-card" href="{% url 'account_add' %}"><strong>Thêm tài khoản</strong><span class="muted">Tạo tài khoản và cấp vai trò theo quy trình.</span></a>
+    {% endif %}
+    {% if perms.core.approve_reader_registration %}
+      <a class="card quick-card" href="{% url 'reader_registration_list' %}"><strong>Duyệt đăng ký độc giả</strong><span class="muted">Xem hồ sơ đăng ký và quyết định phê duyệt.</span></a>
+    {% endif %}
+    <a class="card quick-card" href="{% url 'role_inspector' %}?role=system_admin"><strong>Ma trận quyền</strong><span class="muted">Đối chiếu các chức năng được cấp cho từng vai trò.</span></a>
+    <a class="card quick-card" href="#admin-services"><strong>Cấu hình và dịch vụ</strong><span class="muted">Thông báo, giới hạn đăng nhập và thời hạn phiên.</span></a>
+    <a class="card quick-card" href="#admin-sessions"><strong>Phiên và thiết bị</strong><span class="muted">Mở công cụ thu hồi phiên đăng nhập và thiết bị xác thực.</span></a>
+    <a class="card quick-card" href="#admin-audit"><strong>Nhật ký quản trị</strong><span class="muted">Đối chiếu người thao tác, thời điểm và sự kiện.</span></a>
+  </div>
+</section>
+<section class="card personal-card" id="admin-backup" aria-labelledby="admin-backup-title">
+  <h2 id="admin-backup-title">Sao lưu và phục hồi</h2>
+  <div class="d-flex flex-wrap gap-2">
+    <a class="btn btn-outline-primary" href="{% url 'backup_download' %}">Tạo và tải bản sao lưu</a>
+    <a class="btn btn-outline-primary" href="{% url 'restore_rehearsal' %}">Phục hồi thử</a>
+  </div>
+  <h3 class="mt-3">Phục hồi chính thức</h3>
+  <p>Dùng bản sao đã phục hồi thử thành công để chuẩn bị một cơ sở dữ liệu PostgreSQL mới. Chuyển web sang dữ liệu đã xác minh trong thời gian bảo trì.</p>
+  <details class="review-disclosure">
+    <summary>Xem các bước chuẩn bị</summary>
+    <ol>
+      <li>Tạo bản sao lưu mới của dữ liệu đang dùng để có thể quay lại.</li>
+      <li>Tạo một cơ sở dữ liệu PostgreSQL trống và đặt URL trực tiếp vào biến môi trường <code>LIBRARY_RESTORE_TARGET_URL</code>.</li>
+      <li>Chạy lệnh dưới đây từ thư mục web. Giữ thư mục kết quả ở nơi riêng tư.</li>
+    </ol>
+    <pre>python manage.py prepare_library_restore --backup "backup.zip" --output "restore-staging"</pre>
+    <p>Chỉ chuyển cấu hình web và tác vụ định kỳ sau khi tệp <code>verification.json</code> báo thành công. Dừng ghi trong thời gian chuyển đổi và kiểm tra đăng nhập, kho sách và phiếu mượn trước khi mở lại.</p>
+  </details>
+</section>
+{% include "core/operations_panels.html" with on_admin_dashboard=True %}
+{% endblock %}

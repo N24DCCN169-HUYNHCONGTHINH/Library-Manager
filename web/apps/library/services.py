@@ -11,13 +11,22 @@ from django.utils import timezone
 from apps.core.models import ReaderProfile
 from .models import (
     Book, BookCopy, CirculationPolicy, DamageCase, Fine, FinePayment, Loan, LoanEvent,
-    LoanRenewal, LibraryClosure, LibraryHours, ReaderRestriction, Reservation,
+    LoanNotification, LoanRenewal, LibraryClosure, LibraryHours, ReaderRestriction, Reservation,
     CirculationMutex, ReservationNotification,
 )
 
 
 class CirculationError(Exception):
     """A circulation rule prevents this transaction."""
+
+
+class DamageRestrictionError(CirculationError):
+    def __init__(self, case):
+        self.case_id = case.pk
+        super().__init__(f"Độc giả còn hồ sơ mất/hỏng #{case.pk}: {case.description[:160]}")
+
+
+PENDING_DAMAGE_STATUSES = (DamageCase.Status.OPEN, DamageCase.Status.CONTESTED, DamageCase.Status.APPROVED)
 
 
 def circulation_write(func):
@@ -100,7 +109,12 @@ def _assert_eligible(reader, policy=None):
     today = timezone.localdate()
     if not reader.user.is_active or not reader.card_is_current:
         raise CirculationError("Tài khoản hoặc thẻ bạn đọc chưa hoạt động, chưa xác minh hoặc đã hết hạn.")
-    if reader.restrictions.filter(resolved_at__isnull=True).exists():
+    restrictions = reader.restrictions.filter(resolved_at__isnull=True)
+    if restrictions.filter(kind=ReaderRestriction.Kind.DAMAGE_REVIEW).exists():
+        case = DamageCase.objects.filter(loan__reader=reader, status__in=PENDING_DAMAGE_STATUSES).order_by("-pk").first()
+        if case:
+            raise DamageRestrictionError(case)
+    if restrictions.exists():
         raise CirculationError("Hồ sơ đang bị hạn chế giao dịch; vui lòng liên hệ thư viện.")
     for fine in Fine.objects.filter(loan__reader=reader):
         if fine.balance > 0:
@@ -125,12 +139,12 @@ def _calendar_snapshot():
     }
 
 
-def checkout_copy(reader_number, barcode, actor, idempotency_key=None):
+def checkout_copy(reader_number, barcode, actor, idempotency_key=None, *, loan_days=None, exact_duration=None):
     _require_permission(actor, "checkout_loan")
     # Housekeeping commits independently; rejecting a pickup must not resurrect
     # an expired hold or roll back allocation to the next reader.
     expire_ready_reservations()
-    return _checkout_copy(reader_number, barcode, actor, idempotency_key)
+    return _checkout_copy(reader_number, barcode, actor, idempotency_key, loan_days=loan_days, exact_duration=exact_duration)
 
 
 def checkout_reservation(reservation_id, actor):
@@ -151,7 +165,7 @@ def _checkout_reservation(reservation_id, actor):
 
 
 @circulation_write
-def _checkout_copy(reader_number, barcode, actor, idempotency_key=None):
+def _checkout_copy(reader_number, barcode, actor, idempotency_key=None, *, loan_days=None, exact_duration=None):
     _require_permission(actor, "checkout_loan")
     reader = ReaderProfile.objects.select_for_update().select_related("user").get(reader_number=reader_number)
     copy = BookCopy.objects.select_for_update().select_related("book").defer('book__cover_image').get(barcode=barcode)
@@ -172,8 +186,19 @@ def _checkout_copy(reader_number, barcode, actor, idempotency_key=None):
     if not policy.allow_home_loan:
         raise CirculationError("Chính sách hiện tại không cho mượn loại tài liệu này.")
     _assert_eligible(reader, policy)
-    active_queue = Reservation.objects.filter(book=copy.book, status__in=[Reservation.Status.WAITING, Reservation.Status.READY]).order_by("created_at", "pk")
+    active_queue = Reservation.objects.filter(book=copy.book, status__in=[Reservation.Status.WAITING, Reservation.Status.READY]).filter(
+        Q(pickup_branch__isnull=True) | Q(pickup_branch_id=copy.branch_id)
+    ).order_by("created_at", "pk")
     assigned = active_queue.filter(reader=reader, status=Reservation.Status.READY, copy=copy).first()
+    if assigned and loan_days is None and exact_duration is None:
+        loan_days = assigned.requested_loan_days
+        if assigned.requested_duration_seconds is not None:
+            exact_duration = timedelta(seconds=assigned.requested_duration_seconds)
+    if loan_days is not None and not 1 <= loan_days <= policy.loan_days:
+        raise CirculationError(f"Số ngày mượn phải từ 1 đến {policy.loan_days} theo chính sách hiện tại.")
+    if exact_duration is not None and not timedelta(0) < exact_duration <= timedelta(days=policy.loan_days):
+        raise CirculationError(f"Thời lượng mượn phải lớn hơn 0 và không vượt quá {policy.loan_days} ngày.")
+    duration = policy.loan_days if loan_days is None else loan_days
     if copy.status == BookCopy.Status.ON_HOLD and not assigned:
         raise CirculationError("Bản sách đang được giữ cho bạn đọc trong hàng chờ.")
     if active_queue.exists():
@@ -183,6 +208,7 @@ def _checkout_copy(reader_number, barcode, actor, idempotency_key=None):
         assigned.closed_at = timezone.now()
         assigned.save(update_fields=["status", "closed_at"])
     now = timezone.now()
+    due_at = now + exact_duration if exact_duration is not None else _due_at(now, duration)
     loan = Loan.objects.create(
         reader=reader, copy=copy, policy=policy, reader_type_snapshot=reader.reader_type,
         material_type_snapshot=copy.book.material_type, policy_version_snapshot=policy.version,
@@ -190,13 +216,16 @@ def _checkout_copy(reader_number, barcode, actor, idempotency_key=None):
         overdue_cap_snapshot=policy.overdue_fine_cap,
         replacement_price_snapshot=(copy.book.replacement_price if copy.book.replacement_price_approved_at else None),
         calendar_snapshot=_calendar_snapshot(),
-        loaned_at=now, due_at=_due_at(now, policy.loan_days),
+        loaned_at=now, due_at=due_at,
         max_renewals_snapshot=policy.max_renewals, renewal_days_snapshot=policy.renewal_days,
         idempotency_key=idempotency_key, created_by=actor,
     )
     copy.status = BookCopy.Status.ON_LOAN
     copy.save(update_fields=["status"])
-    _event(loan, "checkout", actor, details={"policy_version": policy.version})
+    details = {"policy_version": policy.version, "loan_days": duration}
+    if exact_duration is not None:
+        details = {"policy_version": policy.version, "duration_seconds": int(exact_duration.total_seconds())}
+    _event(loan, "checkout", actor, details=details)
     return loan
 
 
@@ -234,8 +263,28 @@ def _accrue_fine(loan, returned_at):
     return fine
 
 
+def prepare_loan_notifications(reminder_days):
+    today = timezone.localdate()
+    prepared = 0
+    for loan in Loan.objects.filter(status=Loan.Status.OPEN).only("due_at").iterator():
+        delta = (today - timezone.localtime(loan.due_at).date()).days
+        if delta == 0:
+            kind = "due"
+        elif delta == -reminder_days:
+            kind = "upcoming"
+        elif delta > 0 and delta % 3 == 0:
+            kind = "overdue"
+        else:
+            continue
+        _, created = LoanNotification.objects.get_or_create(
+            loan=loan, due_at=loan.due_at, reminder_date=today, defaults={"kind": kind},
+        )
+        prepared += int(created)
+    return prepared
+
+
 @circulation_write
-def refresh_overdue_loans(reader=None):
+def refresh_overdue_loans(reader=None, *, actor=None):
     now = timezone.now()
     loans = Loan.objects.filter(status=Loan.Status.OPEN, due_at__lt=now).select_related("reader__user", "copy__book").defer('copy__book__cover_image')
     if reader is not None:
@@ -254,7 +303,7 @@ def refresh_overdue_loans(reader=None):
                 profile.save(update_fields=["status", "updated_at"])
                 from apps.core.lifecycle import record_security_event
                 from apps.core.models import AccountSecurityEvent
-                record_security_event(profile.user, AccountSecurityEvent.Kind.ACCOUNT_DISABLED,
+                record_security_event(profile.user, AccountSecurityEvent.Kind.ACCOUNT_DISABLED, actor,
                     details={"reason": "Tạm ngưng do quá hạn đủ 7 ngày", "source": "automatic_overdue_review", "loan_id": loan.pk})
             refreshed += 1
     return refreshed
@@ -371,6 +420,98 @@ def approve_damage_case(case_id, actor, replacement_amount, processing_fee, reas
 
 
 @circulation_write
+def update_damaged_copy_status(case_id, actor, status, reason):
+    _require_permission(actor, "approve_damagecase")
+    reason = reason.strip()
+    if status not in {BookCopy.Status.AVAILABLE, BookCopy.Status.DAMAGED} or not reason or len(reason) > 500:
+        raise CirculationError("Chọn tình trạng và nhập lý do từ 1 đến 500 ký tự.")
+    case = DamageCase.objects.select_related("loan").get(pk=case_id)
+    copy = BookCopy.objects.select_for_update().get(pk=case.loan.copy_id)
+    Book.objects.select_for_update().get(pk=copy.book_id)
+    latest_case = DamageCase.objects.filter(loan__copy_id=copy.pk).order_by("-pk").first()
+    if latest_case.pk != case.pk or copy.status not in {BookCopy.Status.RETURN_REVIEW, BookCopy.Status.DAMAGED}:
+        raise CirculationError("Bản sách không còn thuộc hồ sơ đang cần cập nhật.")
+    if Loan.objects.filter(copy=copy, status=Loan.Status.OPEN).exists():
+        raise CirculationError("Bản sách còn phiếu mượn đang mở.")
+    previous_status = copy.status
+    copy.status = status
+    copy.condition_note = reason
+    copy.save(update_fields=["status", "condition_note"])
+    if status == BookCopy.Status.AVAILABLE:
+        allocate_next_reservation(copy, actor)
+        copy.refresh_from_db(fields=["status"])
+    _event(case.loan, "copy_condition_updated", actor, reason=reason, details={
+        "case_id": case.pk, "previous_status": previous_status, "status": copy.status,
+    })
+    return copy
+
+
+@circulation_write
+def settle_damage_case(case_id, actor, *, no_charge=False, reason=""):
+    _require_permission(actor, "approve_damagecase" if no_charge else "collect_finepayment")
+    case = DamageCase.objects.select_for_update().select_related("loan").get(pk=case_id)
+    reason = reason.strip()
+    if case.status != DamageCase.Status.SETTLED:
+        if no_charge:
+            if case.status not in PENDING_DAMAGE_STATUSES or (case.status == DamageCase.Status.APPROVED and case.compensation_total):
+                raise CirculationError("Hồ sơ không đủ điều kiện hoàn tất không thu bồi thường.")
+            if not reason or len(reason) > 500:
+                raise CirculationError("Nhập lý do từ 1 đến 500 ký tự.")
+            case.replacement_amount = 0
+            case.processing_fee = 0
+            case.decision_reason = reason
+            case.approved_by = actor
+            case.approved_at = timezone.now()
+        elif case.status != DamageCase.Status.APPROVED or case.replacement_amount is None or case.compensation_total <= 0:
+            raise CirculationError("Hồ sơ cần có số tiền bồi thường đã duyệt trước khi ghi nhận thu.")
+        case.status = DamageCase.Status.SETTLED
+        case.settled_at = timezone.now()
+        case.save(update_fields=[
+            "status", "settled_at", "replacement_amount", "processing_fee",
+            "decision_reason", "approved_by", "approved_at",
+        ])
+        details = {"case_id": case.pk, "amount": str(case.compensation_total)}
+        if not no_charge:
+            details["receipt_number"] = f"BT-{case.pk}"
+        _event(case.loan, "damage_settled", actor, reason=reason, details=details)
+    reader_id = case.loan.reader_id
+    if not DamageCase.objects.filter(loan__reader_id=reader_id, status__in=PENDING_DAMAGE_STATUSES).exists():
+        ReaderRestriction.objects.filter(
+            reader_id=reader_id, kind=ReaderRestriction.Kind.DAMAGE_REVIEW, resolved_at__isnull=True,
+        ).update(resolved_at=timezone.now(), resolved_by=actor, resolution=f"Đã hoàn tất xử lý hồ sơ mất/hỏng #{case.pk}.")
+    return case
+
+
+@circulation_write
+def report_lost_loan(loan_id, actor, reason):
+    _require_permission(actor, "return_loan")
+    reason = reason.strip()
+    if not reason or len(reason) > 500:
+        raise CirculationError("Nhập lý do báo mất từ 1 đến 500 ký tự.")
+    loan = Loan.objects.select_for_update().get(pk=loan_id)
+    if loan.status == Loan.Status.LOST:
+        return loan
+    if loan.status != Loan.Status.OPEN:
+        raise CirculationError("Chỉ phiếu đang mượn mới có thể báo mất.")
+    copy = BookCopy.objects.select_for_update().get(pk=loan.copy_id)
+    if copy.status != BookCopy.Status.ON_LOAN:
+        raise CirculationError("Bản sách không còn ở trạng thái đang mượn.")
+    loan.status = Loan.Status.LOST
+    loan.save(update_fields=["status"])
+    _accrue_fine(loan, timezone.now())
+    copy.status = BookCopy.Status.LOST
+    copy.condition_note = reason
+    copy.save(update_fields=["status", "condition_note"])
+    case = DamageCase.objects.create(loan=loan, kind=DamageCase.Kind.LOST, description=reason, created_by=actor)
+    ReaderRestriction.objects.get_or_create(
+        reader_id=loan.reader_id, kind=ReaderRestriction.Kind.DAMAGE_REVIEW, resolved_at__isnull=True,
+        defaults={"reason": reason, "created_by": actor},
+    )
+    _event(loan, "lost", actor, reason=reason, details={"case_id": case.pk})
+    return loan
+
+
+@circulation_write
 def return_copy(barcode, actor, condition_note="", idempotency_key=None, condition_kind=None):
     _require_permission(actor, "return_loan")
     condition_kind = condition_kind or (DamageCase.Kind.MINOR_DAMAGE if condition_note else DamageCase.Kind.NORMAL_WEAR)
@@ -414,10 +555,10 @@ def return_copy(barcode, actor, condition_note="", idempotency_key=None, conditi
 
 
 @circulation_write
-def renew_loan(loan_id, actor, idempotency_key=None):
+def renew_loan(loan_id, actor, idempotency_key=None, *, extension=None):
     loan = Loan.objects.select_for_update().select_related("reader__user", "copy__book", "policy").defer('copy__book__cover_image').get(pk=loan_id)
     now = timezone.now()
-    if loan.reader.user_id != getattr(actor, "pk", None):
+    if extension is not None or loan.reader.user_id != getattr(actor, "pk", None):
         _require_permission(actor, "renew_loan")
     if idempotency_key:
         existing = LoanRenewal.objects.filter(idempotency_key=idempotency_key).first()
@@ -439,7 +580,12 @@ def renew_loan(loan_id, actor, idempotency_key=None):
         raise CirculationError("Sách đã có người đặt trước, không thể gia hạn.")
     _assert_eligible(loan.reader)
     old_due = loan.due_at
-    new_due = _due_at(old_due, loan.renewal_days_snapshot)
+    if extension is None:
+        new_due = _due_at(old_due, loan.renewal_days_snapshot)
+    else:
+        if not timedelta(0) < extension <= timedelta(days=loan.renewal_days_snapshot):
+            raise CirculationError(f"Thời lượng gia hạn phải lớn hơn 0 và không vượt quá {loan.renewal_days_snapshot} ngày của phiếu.")
+        new_due = old_due + extension
     loan.due_at = new_due
     loan.renewal_count += 1
     loan.save(update_fields=["due_at", "renewal_count"])
@@ -450,7 +596,7 @@ def renew_loan(loan_id, actor, idempotency_key=None):
 
 
 @circulation_write
-def place_reservation(reader, book_id, actor, *, allow_available=False):
+def place_reservation(reader, book_id, actor, *, allow_available=False, branch=None, loan_days=None, exact_duration=None):
     if reader.user_id != getattr(actor, "pk", None):
         raise CirculationError("Bạn chỉ được đặt trước bằng hồ sơ bạn đọc của chính mình.")
     reader = ReaderProfile.objects.select_for_update().select_related("user").get(pk=reader.pk)
@@ -460,6 +606,10 @@ def place_reservation(reader, book_id, actor, *, allow_available=False):
     if reader.restrictions.filter(resolved_at__isnull=True).exists():
         raise CirculationError("Hồ sơ đang bị hạn chế giao dịch.")
     loanable_copies = book.copies.filter(is_active=True).filter(Q(home_loan_override=True) | Q(home_loan_override__isnull=True, book__loan_mode=Book.LoanMode.HOME_LOAN))
+    if branch is not None:
+        loanable_copies = loanable_copies.filter(branch=branch, branch__is_active=True)
+        if not loanable_copies.exists():
+            raise CirculationError("Cơ sở đã chọn không có bản sách được phép mượn về.")
     if not loanable_copies.exists():
         raise CirculationError("Tài liệu chỉ phục vụ đọc tại chỗ, không nhận đặt trước.")
     queueable_copies = loanable_copies.filter(status__in=[BookCopy.Status.ON_LOAN, BookCopy.Status.ON_HOLD, BookCopy.Status.RETURN_PENDING])
@@ -475,7 +625,14 @@ def place_reservation(reader, book_id, actor, *, allow_available=False):
         raise CirculationError("Đang có bản sẵn sàng; hãy liên hệ quầy để mượn.")
     if Reservation.objects.filter(reader=reader, book=book, status__in=[Reservation.Status.WAITING, Reservation.Status.READY]).exists():
         raise CirculationError("Bạn đã có yêu cầu đặt trước đang hoạt động cho sách này.")
-    reservation = Reservation.objects.create(reader=reader, book=book)
+    if loan_days is not None and not 1 <= loan_days <= policy.loan_days:
+        raise CirculationError(f"Số ngày mượn phải từ 1 đến {policy.loan_days} theo chính sách hiện tại.")
+    if exact_duration is not None and not timedelta(0) < exact_duration <= timedelta(days=policy.loan_days):
+        raise CirculationError(f"Thời lượng mượn phải lớn hơn 0 và không vượt quá {policy.loan_days} ngày.")
+    reservation = Reservation.objects.create(
+        reader=reader, book=book, pickup_branch=branch, requested_loan_days=loan_days,
+        requested_duration_seconds=int(exact_duration.total_seconds()) if exact_duration is not None else None,
+    )
     if allow_available:
         for copy in available_copies.order_by("pk"):
             allocate_next_reservation(copy, actor)
@@ -522,7 +679,12 @@ def allocate_next_reservation(copy, actor):
     if not copy.is_active or not copy.book.is_active or not copy.allows_home_loan or copy.status != BookCopy.Status.AVAILABLE:
         return None
     now = timezone.now()
-    queue = Reservation.objects.select_for_update().filter(book=copy.book, status=Reservation.Status.WAITING).select_related("reader__user").order_by("created_at", "pk")
+    pickup_scope = Q(pickup_branch__isnull=True)
+    if copy.branch_id and copy.branch.is_active:
+        pickup_scope |= Q(pickup_branch_id=copy.branch_id)
+    queue = Reservation.objects.select_for_update().filter(
+        pickup_scope, book=copy.book, status=Reservation.Status.WAITING,
+    ).select_related("reader__user").order_by("created_at", "pk")
     for reservation in queue:
         try:
             policy = _policy(reservation.reader, copy, timezone.localdate())
@@ -540,7 +702,8 @@ def allocate_next_reservation(copy, actor):
         reservation.status = Reservation.Status.READY
         reservation.copy = copy
         reservation.ready_at = now
-        reservation.expires_at = _hold_expiry(now)
+        hold_expiry = _hold_expiry(now)
+        reservation.expires_at = min(hold_expiry, reservation.reader.membership_expires_at) if reservation.reader.membership_expires_at else hold_expiry
         reservation.save(update_fields=["status", "copy", "ready_at", "expires_at"])
         ReservationNotification.objects.get_or_create(reservation=reservation)
         return reservation

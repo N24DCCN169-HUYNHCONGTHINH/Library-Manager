@@ -60,3 +60,10 @@ Tài liệu chính thức:
 - https://developers.momo.vn/v3/docs/payment/onboarding/integration-process/
 - https://developers.momo.vn/v3/docs/payment/api/wallet/onetime/
 - https://sandbox.vnpayment.vn/apis/docs/thanh-toan-pay/pay.html
+
+
+### Thử thanh toán gói thẻ và khoản phạt
+
+- Gói thẻ: chọn gói để tạo yêu cầu, rồi bấm **Thanh toán thử VNPAY**. Giao dịch Sandbox lưu riêng; việc thu và kích hoạt gói thật vẫn xác nhận tại quầy.
+- Khoản phạt: mở **Thanh toán thử Sandbox** từ phiếu hoặc cổng độc giả. Khi có cấu hình VNPAY, ô sử dụng cổng thử được chọn sẵn.
+- Đăng ký URL IPN HTTPS của môi trường thử nghiệm với VNPAY, theo đường dẫn `/library/payments/vnpay/ipn/`. URL phải truy cập được từ cổng thanh toán. Trang quay về trên trình duyệt không xác nhận kết quả.

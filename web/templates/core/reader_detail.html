@@ -1,0 +1,65 @@
+{% extends "base.html" %}
+{% block title %}Hồ sơ độc giả · Thư viện{% endblock %}
+{% block content %}
+<div class="reader-detail-layout{% if history_sections %} reader-detail-with-history{% endif %}">
+<div class="reader-profile-column">
+<header class="card reader-profile-heading reader-profile-sticky">
+  <div class="reader-profile-heading-content">
+    <div>
+      <div class="eyebrow">HỒ SƠ ĐỘC GIẢ</div>
+      <h1>{{ profile.user.get_full_name|default:profile.user.username }}</h1>
+    </div>
+    <div class="reader-profile-actions">
+      {% if history_sections %}
+        <button type="button" class="btn btn-outline-primary reader-profile-pin" data-reader-profile-pin aria-pressed="true" aria-label="Ghim hồ sơ" title="Bỏ ghim hồ sơ" hidden>
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path class="reader-pin-shape" d="M8 4h8l-1 6 3 3v2H6v-2l3-3z"/>
+            <path d="M12 15v6"/>
+          </svg>
+          <span data-reader-pin-label aria-hidden="true">Bỏ ghim</span>
+        </button>
+      {% endif %}
+      {% if perms.core.change_readerprofile %}<a class="btn btn-primary" href="{% url 'reader_edit' profile.pk %}">Chỉnh sửa hồ sơ</a>{% endif %}
+      <a class="btn btn-outline-primary" href="{% url 'reader_list' %}">Quay lại danh sách</a>
+    </div>
+  </div>
+</header>
+<section class="card reader-profile-card" aria-label="Thông tin hồ sơ độc giả">
+  {% for message in messages %}<p role="status">{{ message }}</p>{% endfor %}
+  <div class="reader-profile-grid">
+    <section class="reader-profile-group">
+      <h2>Thẻ thư viện</h2>
+      <dl>
+        <div><dt>Mã bạn đọc</dt><dd>{{ profile.reader_number }}</dd></div>
+        <div><dt>Loại độc giả</dt><dd>{{ profile.get_reader_type_display }}</dd></div>
+        <div><dt>Trạng thái thẻ</dt><dd><span class="badge {% if profile.card_is_current %}bg-teal-lt{% else %}bg-orange-lt{% endif %}">{{ profile.get_status_display }}</span> · {% if profile.membership_verified %}Đã xác minh{% else %}Chưa xác minh{% endif %}</dd></div>
+        <div><dt>Hiệu lực</dt><dd>{{ profile.valid_from|date:"d/m/Y" }} – {{ profile.valid_until|date:"d/m/Y" }}</dd></div>
+      </dl>
+    </section>
+    <section class="reader-profile-group">
+      <h2>Tài khoản và liên hệ</h2>
+      <dl>
+        <div><dt>Tên đăng nhập</dt><dd>{{ profile.user.username }}</dd></div>
+        <div><dt>Email tài khoản</dt><dd>{{ profile.user.email|default:"Chưa có" }}</dd></div>
+        {% if perms.core.change_readerprofile %}
+          <div><dt>Email liên hệ</dt><dd>{{ profile.contact_email|default:"Chưa có" }}</dd></div>
+          <div><dt>Số điện thoại</dt><dd>{{ profile.phone_number|default:"Chưa có" }}</dd></div>
+          <div><dt>Địa chỉ</dt><dd>{{ profile.address|default:"Chưa có" }}</dd></div>
+        {% endif %}
+      </dl>
+    </section>
+    {% if perms.core.change_readerprofile %}
+      <section class="reader-profile-group">
+        <h2>Căn cước công dân</h2>
+        <dl>
+          <div><dt>Số căn cước</dt><dd>{{ profile.citizen_id|default:"Chưa có" }}</dd></div>
+          <div><dt>Ngày cấp</dt><dd>{{ profile.citizen_id_issued_on|date:"d/m/Y"|default:"Chưa có" }}</dd></div>
+        </dl>
+      </section>
+    {% endif %}
+  </div>
+</section>
+</div>
+{% if history_sections %}{% include "core/reader_history.html" %}{% endif %}
+</div>
+{% endblock %}

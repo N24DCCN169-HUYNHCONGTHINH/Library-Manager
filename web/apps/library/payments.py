@@ -17,11 +17,11 @@ from django.views.decorators.cache import never_cache
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_POST, require_GET
 from apps.core.views import has_staff_role
-from .models import PaymentOrder, Fine
+from .models import DamageCase, PaymentOrder, Fine
 
 class PaymentStartForm(forms.Form):
     request_key=forms.UUIDField(initial=uuid.uuid4,widget=forms.HiddenInput)
-    channel=forms.ChoiceField(label="Phương thức",choices=[("bank","Vietcombank — mô phỏng"),("momo","MoMo — mô phỏng")],widget=forms.RadioSelect)
+    channel=forms.ChoiceField(label="Phương thức",choices=[("bank","Ngân hàng / VNPAY"),("momo","MoMo")],widget=forms.RadioSelect)
     amount=forms.DecimalField(label="Số tiền thử (VND)",min_value=1,max_digits=10,decimal_places=0)
     use_bank_sandbox=forms.BooleanField(label="Dùng cổng ngân hàng VNPAY Sandbox đã cấu hình",required=False)
     use_momo_sandbox=forms.BooleanField(label="Dùng cổng MoMo Sandbox đã cấu hình thay cho mô phỏng",required=False)
@@ -63,7 +63,7 @@ def start_order(*,user,fine_id,amount,channel,request_key,mode="simulator"):
         raise ValidationError("Phương thức không hợp lệ.")
     if amount<=0 or amount>fine.balance: raise ValidationError("Số tiền phải lớn hơn 0 và không vượt số dư khoản phạt.")
     now=timezone.now()
-    pending=PaymentOrder.objects.filter(requester=user,fine=fine,channel=channel,mode=mode,state="pending",expires_at__gt=now).first()
+    pending=PaymentOrder.objects.filter(requester=user,fine=fine,channel=channel,mode=mode,amount=amount,state="pending",expires_at__gt=now).first()
     if pending: return pending
     return PaymentOrder.objects.create(requester=user,fine=fine,amount=amount,channel=channel,request_key=request_key,mode=mode,expires_at=now+timedelta(minutes=15))
 
@@ -89,7 +89,9 @@ def initiate_momo(order,request):
 @payment_access
 def payment_start(request,fine_id):
     fine=get_object_or_404(fine_scope(request.user),pk=fine_id)
-    form=PaymentStartForm(request.POST if request.method=="POST" else None,initial={"amount":fine.balance,"channel":"bank"})
+    bank_ready = all(vnpay_keys())
+    form=PaymentStartForm(request.POST if request.method=="POST" else None,
+                          initial={"amount": fine.balance, "channel": "bank", "use_bank_sandbox": bank_ready})
     if request.method=="POST" and form.is_valid():
         try:
             data=form.cleaned_data.copy()
@@ -104,7 +106,43 @@ def payment_start(request,fine_id):
         except (ValidationError,IntegrityError) as exc:
             form.add_error(None,exc if isinstance(exc,ValidationError) else "Yêu cầu trùng. Hãy mở lại lịch sử giao dịch thử.")
         else: return redirect("library:payment_detail",order_id=order.pk)
-    return render(request,"library/payment_start.html",{"fine":fine,"form":form,"momo_ready":all(momo_keys()),"bank_ready":all(vnpay_keys())})
+    return render(request,"library/payment_start.html",{"fine":fine,"form":form,"momo_ready":all(momo_keys()),"bank_ready":bank_ready})
+
+@never_cache
+@payment_access
+@require_POST
+def damage_payment_start(request, case_id):
+    staff = has_staff_role(request.user) and request.user.has_perm("library.collect_finepayment")
+    cases = DamageCase.objects.all()
+    if staff:
+        back = reverse("library:circulation_desk") + "?tab=loans&operation=fines#fines"
+    elif request.user.groups.filter(name="reader").exists():
+        cases = cases.filter(loan__reader__user=request.user)
+        back = reverse("reader_portal") + "#reader-compensation"
+    else:
+        return HttpResponseForbidden()
+    if not all(vnpay_keys()):
+        messages.error(request, "Chưa cấu hình VNPAY Sandbox.")
+        return redirect(back)
+    with transaction.atomic():
+        case = get_object_or_404(cases.select_for_update(), pk=case_id)
+        if case.status != DamageCase.Status.APPROVED or case.replacement_amount is None or case.compensation_total <= 0:
+            messages.error(request, "Hồ sơ chưa có khoản bồi thường đang chờ thu.")
+            return redirect(back)
+        now = timezone.now()
+        order = PaymentOrder.objects.filter(
+            damage_case=case, requester=request.user, amount=case.compensation_total,
+            state="pending", expires_at__gt=now,
+        ).first()
+        if order is None:
+            order = PaymentOrder.objects.create(
+                damage_case=case, requester=request.user, amount=case.compensation_total,
+                channel="bank", mode="vnpay_sandbox", request_key=uuid.uuid4(),
+                expires_at=now + timedelta(minutes=15),
+            )
+        initiate_vnpay(order, request)
+    return redirect(order.provider_pay_url)
+
 
 @never_cache
 @payment_access
@@ -184,6 +222,9 @@ def vnpay_ipn(request):
     data={key:value for key,value in request.GET.items() if key.startswith("vnp_") and key not in {"vnp_SecureHash","vnp_SecureHashType"}}
     if not hmac.compare_digest(vnpay_signature(data,secret),request.GET.get("vnp_SecureHash","")) or data.get("vnp_TmnCode")!=merchant:
         return JsonResponse({"RspCode":"97","Message":"Invalid signature"})
+    if data.get("vnp_TxnRef", "").startswith("TV"):
+        from apps.core.memberships import confirm_membership_sandbox
+        return confirm_membership_sandbox(data)
     try:
         with transaction.atomic():
             order=PaymentOrder.objects.select_for_update().get(pk=data["vnp_TxnRef"],mode="vnpay_sandbox",channel="bank")

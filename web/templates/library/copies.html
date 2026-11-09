@@ -1,1 +1,22 @@
-{% extends "base.html" %}{% block title %}Bản sách · {{ book.title }}{% endblock %}{% block content %}<div class="personal-heading"><div><span class="eyebrow">QUẢN LÝ KHO</span><h1>{{ book.title }}</h1><p>{{ book.catalog_number }} · Mã vạch, vị trí và tình trạng từng bản.</p></div><a href="{% url 'library:book_list' %}" class="btn btn-outline-secondary">← Tủ sách</a></div><div class="personal-grid"><section class="card personal-card"><h2>Các bản sách</h2>{% for copy in copies %}<article><strong>{{ copy.barcode }}</strong><p>{{ copy.branch.name|default:"Chưa gán cơ sở" }} · Kệ {{ copy.shelf_location|default:"Chưa xác định" }} · {{ copy.get_status_display }}</p>{% if perms.library.change_bookcopy %}<a href="{% url 'library:copy_edit' book.pk copy.pk %}">Sửa bản sách →</a>{% endif %}</article>{% empty %}<p>Chưa có bản sách.</p>{% endfor %}</section>{% if form %}<section class="card personal-card"><h2>{% if editing %}Chỉnh sửa bản sách{% else %}Bổ sung bản sách{% endif %}</h2><p class="muted">Trạng thái mượn/giữ chỗ chỉ được đổi qua giao dịch nghiệp vụ.</p><form method="post">{% csrf_token %}{{ form.as_p }}<button class="btn btn-primary">Lưu bản sách</button></form>{% if editing %}<a href="{% url 'library:copies' book.pk %}">+ Thêm bản khác</a>{% endif %}</section>{% endif %}</div>{% endblock %}
+{% extends "base.html" %}{% block title %}Bản sách · {{ book.title }}{% endblock %}{% block content %}<div class="personal-heading"><div><span class="eyebrow">QUẢN LÝ KHO</span><h1>{{ book.title }}</h1><p>{{ book.catalog_number }} · Mã vạch, vị trí và tình trạng từng bản.</p></div><a href="{% url 'library:book_list' %}" class="btn btn-outline-secondary">← Tủ sách</a></div>{% for message in messages %}<p role="status">{{ message }}</p>{% endfor %}<div class="personal-grid"><section class="card personal-card book-copy-list"><h2>Các bản sách</h2>{% for copy in copies %}<article><strong>{{ copy.barcode }}</strong>{% if not copy.is_active %} <span class="badge bg-secondary-lt">Đã xóa / ngừng sử dụng</span>{% endif %}<p>{{ copy.branch.name|default:"Chưa gán cơ sở" }} · Kệ {{ copy.shelf_location|default:"Chưa xác định" }} · {{ copy.get_status_display }}</p>{% if perms.library.change_bookcopy %}<a href="{% url 'library:copy_edit' book.pk copy.pk %}">Sửa bản sách →</a>{% endif %}
+{% if perms.library.manage_bookcopy %}
+  {% if not copy.is_active or copy.status != 'on_loan' and copy.status != 'on_hold' and copy.status != 'return_pending' %}
+    <details class="review-disclosure">
+      <summary>Thao tác bản sách</summary>
+      <form method="post" action="{% url 'library:copy_lifecycle' book.pk copy.pk %}">
+        {% csrf_token %}
+        <label for="copy-action-reason-{{ copy.pk }}">Lý do</label>
+        <input id="copy-action-reason-{{ copy.pk }}" name="reason" maxlength="300" required>
+        {% if copy.is_active %}
+          {% if copy.status == 'lost' %}
+            <p>Chỉ xác nhận tìm lại sau khi đã kiểm tra bản sách có thể lưu thông.</p>
+            <button class="btn btn-primary" name="action" value="found">Đã tìm lại sách</button>
+          {% endif %}
+          <button class="btn btn-outline-danger" name="action" value="remove">Xóa bản sách</button>
+        {% else %}
+          <button class="btn btn-primary" name="action" value="restore">Khôi phục bản sách</button>
+        {% endif %}
+      </form>
+    </details>
+  {% endif %}
+{% endif %}</article>{% empty %}<p>Chưa có bản sách.</p>{% endfor %}</section>{% if form %}<section class="card personal-card"><h2>{% if editing %}Chỉnh sửa bản sách{% else %}Bổ sung bản sách{% endif %}</h2><p class="muted">Trạng thái mượn/giữ chỗ chỉ được đổi qua giao dịch nghiệp vụ.</p><form method="post">{% csrf_token %}{{ form.as_p }}<button class="btn btn-primary">Lưu bản sách</button></form>{% if editing %}<a href="{% url 'library:copies' book.pk %}">+ Thêm bản khác</a>{% endif %}</section>{% endif %}</div>{% endblock %}

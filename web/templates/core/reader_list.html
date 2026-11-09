@@ -1,19 +1,29 @@
 {% extends "base.html" %}
 {% block title %}Quản lý độc giả · Thư viện{% endblock %}
 {% block content %}
-<section class="card">
+<div class="reader-management-page">
+<div class="page-intro reader-management-heading"><div>
   <h1>Quản lý độc giả</h1>
   {% for message in messages %}<p role="status">{{ message }}</p>{% endfor %}
   {% if perms.core.add_readerprofile and perms.core.issue_account_invitation %}<p><a class="btn btn-primary" href="{% url 'reader_add' %}">Thêm độc giả</a></p>{% endif %}
+</div></div>
+<div class="reader-management-grid">
+<section class="card reader-search-panel">
+  <h2>Tìm độc giả</h2>
   <form method="get">
     <label for="q">Mã bạn đọc, tên đăng nhập, họ tên hoặc email</label><input id="q" data-lookup="readers" data-lookup-mode="navigate" name="q" value="{{ query }}">
     <label for="status">Trạng thái thẻ</label><select id="status" name="status"><option value="">Tất cả</option>{% for value, label in statuses %}<option value="{{ value }}"{% if selected_status == value %} selected{% endif %}>{{ label }}</option>{% endfor %}</select>
     <button type="submit">Tìm kiếm</button>
   </form>
+</section>
+<section class="card reader-results-panel">
+  <h2>Kết quả tìm kiếm</h2>
   <p>{{ page_obj.paginator.count }} độc giả</p>
-<div class="table-wrap"><table class="list-table"><thead><tr><th>Độc giả</th><th>Thẻ & hiệu lực</th><th>Xác minh</th><th>Thao tác</th></tr></thead><tbody>{% for profile in page_obj %}<tr{% if perms.core.change_readerprofile %} data-open-url="{% url 'reader_edit' profile.pk %}"{% endif %}><td><strong>{{ profile.user.get_full_name|default:profile.user.username }}</strong><small>{{ profile.reader_number }} · {{ profile.get_reader_type_display }}</small><small>{{ profile.user.username }} · {{ profile.user.email }}</small></td><td><span class="badge {% if profile.card_is_current %}bg-teal-lt{% else %}bg-orange-lt{% endif %}">{{ profile.get_status_display }}</span><small>{{ profile.valid_from|date:"d/m/Y" }} – {{ profile.valid_until|date:"d/m/Y" }}</small><small>{% if profile.card_is_current %}Thẻ còn hiệu lực{% else %}Thẻ chưa đủ điều kiện sử dụng{% endif %}</small></td><td>{% if profile.membership_verified %}Thẻ đã xác minh{% else %}Thẻ chưa xác minh{% endif %}<small>{% if profile.user.is_active %}Đăng nhập đang bật{% else %}Đăng nhập chưa bật{% endif %}</small></td><td>{% if perms.core.change_readerprofile %}<a class="btn btn-sm btn-outline-primary" href="{% url 'reader_edit' profile.pk %}">Sửa hồ sơ</a>{% endif %}</td></tr>{% empty %}<tr><td colspan="4" class="empty-state">Không tìm thấy độc giả.</td></tr>{% endfor %}</tbody></table></div>
+<div class="table-wrap"><table class="list-table reader-results-table"><thead><tr><th>Độc giả</th><th>Thẻ & hiệu lực</th><th>Xác minh</th><th>Thao tác</th></tr></thead><tbody>{% for profile in page_obj %}<tr data-open-url="{% url 'reader_detail' profile.pk %}"><td><strong>{{ profile.user.get_full_name|default:profile.user.username }}</strong><small>{{ profile.reader_number }} · {{ profile.get_reader_type_display }}</small><small>{{ profile.user.username }} · {{ profile.user.email }}</small></td><td><span class="badge {% if profile.card_is_current %}bg-teal-lt{% else %}bg-orange-lt{% endif %}">{{ profile.get_status_display }}</span><small>{{ profile.valid_from|date:"d/m/Y" }} – {{ profile.valid_until|date:"d/m/Y" }}</small><small>{% if profile.card_is_current %}Thẻ còn hiệu lực{% else %}Thẻ chưa đủ điều kiện sử dụng{% endif %}</small></td><td>{% if profile.membership_verified %}Thẻ đã xác minh{% else %}Thẻ chưa xác minh{% endif %}<small>{% if profile.user.is_active %}Đăng nhập đang bật{% else %}Đăng nhập chưa bật{% endif %}</small></td><td><a class="btn btn-sm btn-outline-primary" href="{% url 'reader_detail' profile.pk %}">Xem hồ sơ</a></td></tr>{% empty %}<tr><td colspan="4" class="empty-state">Không tìm thấy độc giả.</td></tr>{% endfor %}</tbody></table></div>
   <p>Trang {{ page_obj.number }} / {{ page_obj.paginator.num_pages }}</p>
   {% if page_obj.has_previous %}<a href="?q={{ query|urlencode }}&amp;status={{ selected_status|urlencode }}&amp;page={{ page_obj.previous_page_number }}">Trang trước</a>{% endif %}
   {% if page_obj.has_next %}<a href="?q={{ query|urlencode }}&amp;status={{ selected_status|urlencode }}&amp;page={{ page_obj.next_page_number }}">Trang sau</a>{% endif %}
 </section>
+</div>
+</div>
 {% endblock %}

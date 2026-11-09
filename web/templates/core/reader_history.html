@@ -1,0 +1,113 @@
+<section class="card" id="reader-history">
+  <h2>Lịch sử hoạt động</h2>
+  <nav class="desk-tabs" aria-label="Nhóm lịch sử độc giả">
+    {% for key, label in history_sections %}
+      <a href="{% querystring history=key history_page=None restriction_page=None %}#reader-history"{% if history_selected == key %} aria-current="page"{% endif %}>{{ label }}</a>
+    {% endfor %}
+  </nav>
+  {% if history_selected %}
+    <form method="get" action="#reader-history" class="reader-history-date-filter">
+      <input type="hidden" name="history" value="{{ history_selected }}">
+      <div>{{ history_date_form.date_from.label_tag }} {{ history_date_form.date_from }} {{ history_date_form.date_from.errors }}</div>
+      <div>{{ history_date_form.date_to.label_tag }} {{ history_date_form.date_to }} {{ history_date_form.date_to.errors }}</div>
+      <button type="submit">Lọc theo ngày</button>
+    </form>
+    <nav class="desk-tabs" aria-label="Mốc thời gian nhanh">
+      {% for label, start in history_quick_ranges %}
+        <a href="?history={{ history_selected }}&amp;date_from={{ start }}&amp;date_to={{ history_today }}#reader-history">{{ label }}</a>
+      {% endfor %}
+      <a href="?history={{ history_selected }}#reader-history">Mọi thời điểm</a>
+    </nav>
+    {% if history_selected == 'loans' %}<p class="muted">Lọc theo ngày mượn của phiếu. Hạn chế mượn được lọc theo ngày ghi nhận.</p>{% endif %}
+    {% if history_selected == 'loans' %}{% include "core/reader_history_summary.html" %}{% endif %}
+    <h3>{{ history_label }}</h3>
+    <div class="table-wrap"><table class="list-table">
+      <thead><tr><th>Thời điểm</th><th>Hoạt động / hồ sơ</th><th>Chi tiết</th>{% if history_selected == 'loans' %}<th>Phạt, biên nhận và sự cố</th>{% endif %}</tr></thead>
+      <tbody>
+      {% for row in history_page %}
+        <tr>
+        {% if history_selected == 'loans' or history_selected == 'overdue' %}
+          <td>{{ row.loaned_at|date:"d/m/Y H:i:s" }}</td>
+          <td>Phiếu #{{ row.pk }} · {{ row.copy.book.title }}<small>{{ row.copy.barcode }}</small></td>
+          <td>
+            {% if row.status == 'lost' %}
+              <span class="badge loan-status-badge loan-status-lost">Đã báo mất</span>
+            {% elif row.status == 'open' and row.due_at < history_now %}
+              <span class="badge loan-status-badge loan-status-overdue">Quá hạn</span>
+            {% elif row.status == 'open' %}
+              <span class="badge loan-status-badge loan-status-open">Đang mượn</span>
+            {% elif row.status == 'returned' %}
+              {% if row.returned_at > row.due_at %}
+                <span class="badge loan-status-badge loan-status-overdue">Đã trả trễ</span>
+              {% elif row.returned_at %}
+                <span class="badge loan-status-badge loan-status-returned">Trả đúng hạn</span>
+              {% else %}
+                <span class="badge loan-status-badge loan-status-returned">Đã trả</span>
+              {% endif %}
+            {% else %}{{ row.get_status_display }}{% endif %}
+            <small>Hạn trả {{ row.due_at|date:"d/m/Y H:i:s" }}</small>
+            {% if row.returned_at %}<small>Đã trả lúc {{ row.returned_at|date:"d/m/Y H:i:s" }}</small>{% endif %}
+            {% if row.status == 'open' and row.due_at < history_now %}<small class="text-danger">Quá hạn từ {{ row.due_at|date:"d/m/Y H:i:s" }}</small>{% endif %}
+            <small>Gia hạn {{ row.renewal_count }} lần</small></td>
+          {% if history_selected == 'loans' %}
+            <td>
+              {% if perms.library.view_fine and row.fine %}
+                <strong>Phạt #{{ row.fine.pk }}</strong>
+                <span class="badge loan-status-badge {% if row.fine.status == 'due' %}loan-status-overdue{% elif row.fine.status == 'accruing' %}loan-status-reminder{% else %}loan-status-returned{% endif %}">{{ row.fine.get_status_display }}</span>
+                <small>{{ row.fine.accrued_days }} ngày tính phạt · Đã ghi {{ row.fine.accrued_amount }} ₫ · Còn {{ row.fine.balance }} ₫</small>
+              {% endif %}
+              {% if perms.library.view_finepayment %}
+                {% for receipt in row.fine.transactions.all %}
+                  <small>{{ receipt.receipt_number }} · {{ receipt.get_kind_display }} {{ receipt.amount }} ₫ · {{ receipt.created_at|date:"d/m/Y H:i" }}{% if receipt.reason %} · {{ receipt.reason }}{% endif %}</small>
+                {% endfor %}
+              {% endif %}
+              {% if perms.library.view_damagecase %}
+                {% for case in row.damage_cases.all %}
+                  <strong>Hồ sơ #{{ case.pk }}</strong>
+                  <span class="badge loan-status-badge {% if case.kind == 'lost' %}loan-status-lost{% else %}loan-status-damaged{% endif %}">{{ case.get_kind_display }}</span>
+                  <small>{{ case.reported_at|date:"d/m/Y H:i" }} · {{ case.get_status_display }} · {{ case.description }}</small>
+                  {% if case.replacement_amount != None %}<small>Bồi thường và phí {{ case.compensation_total }} ₫</small>{% endif %}
+                  {% if case.settled_at %}<small>Hoàn tất {{ case.settled_at|date:"d/m/Y H:i" }}{% if case.compensation_total %} · BT-{{ case.pk }}{% endif %}</small>{% endif %}
+                {% endfor %}
+              {% endif %}
+            </td>
+          {% endif %}
+        {% elif history_selected == 'events' %}
+          <td>{{ row.occurred_at|date:"d/m/Y H:i:s" }}</td>
+          <td>Phiếu #{{ row.loan_id }} · {% if row.event_type == 'checkout' %}Cho mượn{% elif row.event_type == 'return' %}Nhận trả{% elif row.event_type == 'renew' %}Gia hạn{% elif row.event_type == 'lost' %}Báo mất{% elif row.event_type == 'return_requested' %}Yêu cầu trả{% elif row.event_type == 'damage_approved' %}Duyệt mất/hỏng{% elif row.event_type == 'damage_settled' %}Hoàn tất bồi thường{% elif row.event_type == 'copy_condition_updated' %}Cập nhật tình trạng bản sách{% else %}{{ row.event_type }}{% endif %}</td>
+          <td>{{ row.actor.username|default:"Hệ thống" }}{% if row.reason %}<small>{{ row.reason }}</small>{% endif %}</td>
+        {% elif history_selected == 'reservations' %}
+          <td>{{ row.created_at|date:"d/m/Y H:i:s" }}</td><td>Yêu cầu #{{ row.pk }} · {{ row.book.title }}</td>
+          <td><span class="badge loan-status-badge {% if row.status == 'waiting' %}loan-status-open{% elif row.status == 'ready' %}loan-status-reminder{% elif row.status == 'fulfilled' %}loan-status-returned{% else %}loan-status-lost{% endif %}">{{ row.get_status_display }}</span>{% if row.expires_at %}<small>Hạn nhận {{ row.expires_at|date:"d/m/Y H:i" }}</small>{% endif %}{% if row.close_reason %}<small>{{ row.close_reason }}</small>{% endif %}</td>
+        {% elif history_selected == 'fines' %}
+          <td>{{ row.calculated_at|date:"d/m/Y H:i:s" }}</td><td>Khoản #{{ row.pk }} · Phiếu #{{ row.loan_id }}</td>
+          <td><span class="badge loan-status-badge {% if row.status == 'due' %}loan-status-overdue{% elif row.status == 'accruing' %}loan-status-reminder{% else %}loan-status-returned{% endif %}">{{ row.get_status_display }}</span><small>{{ row.accrued_days }} ngày tính phạt · Đã ghi {{ row.accrued_amount }} ₫ · Còn {{ row.balance }} ₫</small></td>
+        {% elif history_selected == 'payments' %}
+          <td>{{ row.created_at|date:"d/m/Y H:i:s" }}</td><td>{{ row.get_kind_display }} · {{ row.receipt_number }}<small>Khoản #{{ row.fine_id }} · Phiếu #{{ row.fine.loan_id }}</small></td>
+          <td>{{ row.amount }} ₫{% if row.reason %}<small>{{ row.reason }}</small>{% endif %}</td>
+        {% elif history_selected == 'damage' %}
+          <td>{{ row.reported_at|date:"d/m/Y H:i:s" }}</td><td>Hồ sơ #{{ row.pk }} · <span class="badge loan-status-badge {% if row.kind == 'lost' %}loan-status-lost{% else %}loan-status-damaged{% endif %}">{{ row.get_kind_display }}</span><small>Phiếu #{{ row.loan_id }} · {{ row.loan.copy.book.title }}</small></td>
+          <td>{{ row.get_status_display }}<small>{{ row.description }}</small>
+            {% if row.replacement_amount != None %}<small>Bồi thường và phí {{ row.compensation_total }} ₫</small>{% endif %}
+            {% if row.settled_at %}<small>Hoàn tất {{ row.settled_at|date:"d/m/Y H:i" }}{% if row.compensation_total %} · BT-{{ row.pk }}{% endif %}</small>{% endif %}</td>
+        {% elif history_selected == 'notices' %}
+          <td>{{ row.created_at|date:"d/m/Y H:i:s" }}</td><td>{{ row.get_kind_display }} · Phiếu #{{ row.loan_id }}</td>
+          <td>{% if row.sent_at %}Đã gửi lúc {{ row.sent_at|date:"d/m/Y H:i" }}{% elif row.last_error %}Gửi chưa thành công{% else %}Chờ gửi{% endif %}</td>
+        {% elif history_selected == 'restrictions' %}
+          <td>{{ row.created_at|date:"d/m/Y H:i:s" }}</td><td>{{ row.get_kind_display }}<small>{{ row.reason }}</small></td>
+          <td>{% if row.resolved_at %}<span class="badge loan-status-badge loan-status-returned">Đã giải quyết</span><small>{{ row.resolved_at|date:"d/m/Y H:i" }} · {{ row.resolution }}</small>{% else %}<span class="badge loan-status-badge loan-status-overdue">Đang áp dụng</span>{% endif %}</td>
+        {% elif history_selected == 'account' %}
+          <td>{{ row.occurred_at|date:"d/m/Y H:i:s" }}</td><td>{{ row.get_kind_display }}</td>
+          <td>{{ row.actor.username|default:"Hệ thống" }}</td>
+        {% endif %}
+        </tr>
+      {% empty %}<tr><td colspan="{% if history_selected == 'loans' %}4{% else %}3{% endif %}">Chưa có dữ liệu trong mục này.</td></tr>{% endfor %}
+      </tbody>
+    </table></div>
+    <nav class="desk-browser-pages" aria-label="Trang lịch sử">
+      {% if history_page.has_previous %}<a href="{% querystring history_page=history_page.previous_page_number %}#reader-history">Trang trước</a>{% endif %}
+      <span>{{ history_page.paginator.count }} mục · Trang {{ history_page.number }}/{{ history_page.paginator.num_pages }}</span>
+      {% if history_page.has_next %}<a href="{% querystring history_page=history_page.next_page_number %}#reader-history">Trang sau</a>{% endif %}
+    </nav>
+  {% else %}<p>Chọn một nhóm để xem các hoạt động đã ghi nhận cho độc giả này.</p>{% endif %}
+</section>

@@ -1,4 +1,5 @@
 from decimal import Decimal
+from django.contrib.auth import get_user_model
 from django.db.models import Case, DecimalField, F, Q, Sum, When
 from django.http import JsonResponse
 from django.urls import reverse
@@ -17,14 +18,15 @@ def lookup(request):
     kind = request.GET.get("kind", "books")
     query = request.GET.get("q", "").strip()[:100]
     permissions = {"staff_books": "library.view_book", "readers": "core.view_readerprofile",
-                   "copies": "library.view_bookcopy", "loans": "library.view_loan", "fines": "library.view_fine"}
+                   "copies": "library.view_bookcopy", "loans": "library.view_loan",
+                   "loan_history": "library.view_loan", "accounts": "auth.view_user", "fines": "library.view_fine"}
     if kind != "books":
         if kind not in permissions:
             return JsonResponse({"error": "Loại tìm kiếm không hợp lệ."}, status=400)
         if not (has_staff_role(request.user) and request.user.is_verified()
                 and request.user.has_perm(permissions[kind])):
             return JsonResponse({"error": "Cần đăng nhập nhân viên, xác minh hai bước và quyền xem phù hợp."}, status=403)
-    if len(query) < 2 and not (kind in {"loans", "fines"} and query.isascii() and query.isdigit()):
+    if not query:
         return JsonResponse({"results": []})
     results = []
     if kind in {"books", "staff_books"}:
@@ -40,6 +42,20 @@ def lookup(request):
             if kind == "staff_books" and request.user.has_perm("library.change_book"):
                 url = reverse("library:book_edit", args=[row.pk])
             results.append({"label": row.title, "detail": f"{row.authors} · {row.catalog_number}", "value": row.catalog_number, "url": url})
+    elif kind == "accounts":
+        rows = get_user_model().objects.filter(security_profile__archived_was_active__isnull=request.GET.get("archived") != "1").filter(
+            Q(username__icontains=query) | Q(first_name__icontains=query)
+            | Q(last_name__icontains=query) | Q(email__icontains=query)
+        )
+        role = request.GET.get("role", "")
+        status = request.GET.get("status", "")
+        if role:
+            rows = rows.filter(groups__name=role)
+        if status in {"active", "inactive"}:
+            rows = rows.filter(is_active=status == "active")
+        for row in rows.order_by("username")[:8]:
+            results.append({"label": row.get_full_name() or row.username, "detail": row.username,
+                            "value": row.username, "url": reverse("account_detail", args=[row.pk])})
     elif kind == "readers":
         rows = ReaderProfile.objects.select_related("user")
         for term in query.split()[:6]:
@@ -49,20 +65,30 @@ def lookup(request):
             rows = rows.filter(status=status)
         rows = rows.order_by("reader_number")[:8]
         for row in rows:
-            url = reverse("reader_list") + "?" + urlencode({"q": row.reader_number})
-            if request.user.has_perm("core.change_readerprofile"):
-                url = reverse("reader_edit", args=[row.pk])
+            url = reverse("reader_detail", args=[row.pk])
             results.append({"label": row.user.get_full_name() or row.user.username, "detail": f"{row.reader_number} · {row.get_status_display()}", "value": row.reader_number, "url": url})
     elif kind == "copies":
-        rows = BookCopy.objects.select_related("book", "branch").defer('book__cover_image').filter(Q(barcode__icontains=query) | Q(book__title__icontains=query) | Q(book__catalog_number__icontains=query)).order_by("barcode")[:8]
-        for row in rows:
+        rows = BookCopy.objects.select_related("book", "branch").defer('book__cover_image').filter(Q(barcode__icontains=query) | Q(book__title__icontains=query) | Q(book__catalog_number__icontains=query)).order_by("barcode")
+        if request.GET.get("copy_status") in {BookCopy.Status.AVAILABLE, BookCopy.Status.ON_LOAN}:
+            rows = rows.filter(status=request.GET["copy_status"])
+        for row in rows[:8]:
             results.append({"label": row.book.title, "detail": f"{row.barcode} · {row.get_status_display()} · {row.branch.name if row.branch else ''}", "value": row.barcode})
     else:
         match = Q(copy__barcode__icontains=query) | Q(copy__book__title__icontains=query) | Q(reader__reader_number__icontains=query)
-        if kind == "loans":
-            rows = Loan.objects.filter(status=Loan.Status.OPEN).select_related("copy__book", "reader").defer('copy__book__cover_image').filter(match | (Q(pk=int(query)) if query.isascii() and query.isdigit() and len(query) < 10 else Q(pk__isnull=True))).order_by("due_at")[:8]
-            for row in rows:
-                results.append({"label": row.copy.book.title, "detail": f"#{row.pk} · {row.copy.barcode} · {row.reader.reader_number}", "value": str(row.pk), "url": reverse("library:staff_loan_detail", args=[row.pk])})
+        if kind in {"loans", "loan_history"}:
+            match |= Q(reader__user__username__icontains=query) | Q(reader__user__first_name__icontains=query) | Q(reader__user__last_name__icontains=query)
+            number = query.removeprefix("#").strip()
+            if number.isascii() and number.isdigit() and len(number) <= 18:
+                match = Q(pk__startswith=number) if query.startswith("#") else match | Q(pk__startswith=number)
+            rows = Loan.objects.select_related("copy__book", "reader").defer("copy__book__cover_image").filter(match)
+            if kind == "loans":
+                rows = rows.filter(status=Loan.Status.OPEN).order_by("due_at", "pk")
+            else:
+                rows = rows.order_by("-pk")
+            for row in rows[:8]:
+                results.append({"label": row.copy.book.title, "detail": f"#{row.pk} · {row.copy.barcode} · {row.reader.reader_number}",
+                                "value": str(row.pk), "search_value": row.copy.barcode,
+                                "url": reverse("library:staff_loan_detail", args=[row.pk])})
         else:
             match = Q(loan__copy__barcode__icontains=query) | Q(loan__copy__book__title__icontains=query) | Q(loan__reader__reader_number__icontains=query)
             if query.isascii() and query.isdigit() and len(query) < 10:

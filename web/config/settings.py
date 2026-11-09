@@ -59,6 +59,7 @@ TEMPLATES = [{
         "django.contrib.messages.context_processors.messages",
         "apps.core.context_processors.library_roles",
         "apps.core.context_processors.appearance_context",
+        "apps.core.context_processors.circulation_bell",
     ]},
 }]
 WSGI_APPLICATION = "config.wsgi.application"

@@ -89,7 +89,7 @@ def create_backup(output, media_root=None):
     return manifest
 
 
-def restore_rehearsal(backup, output):
+def unpack_library_backup(backup, output):
     output = Path(output).resolve()
     if output.exists() and any(output.iterdir()):
         raise ValueError("Restore output must be a new or empty directory")
@@ -118,6 +118,12 @@ def restore_rehearsal(backup, output):
                 shutil.copyfileobj(source, destination)
     manifest_path = output / "manifest.json"
     manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+    return manifest_path
+
+
+def restore_rehearsal(backup, output):
+    output = Path(output).resolve()
+    manifest_path = unpack_library_backup(backup, output)
     env = os.environ.copy()
     env.update(DJANGO_SETTINGS_MODULE="config.restore_local", LIBRARY_RESTORE_DB=str(output / "restored.sqlite3"),
                DJANGO_SECRET_KEY=secrets.token_urlsafe(48), PYTHONIOENCODING="utf-8")

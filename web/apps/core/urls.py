@@ -1,8 +1,12 @@
 from django.urls import path
 from . import views
-from . import reader_views, account_views, operations_views, registration
+from . import reader_views, account_views, operations_views, registration, memberships
 
 urlpatterns = [
+    path("membership/sandbox/", memberships.membership_sandbox_start, name="membership_sandbox_start"),
+    path("membership/", memberships.membership_plans, name="membership_plans"),
+    path("staff/memberships/", memberships.membership_queue, name="membership_queue"),
+    path("staff/memberships/<int:purchase_id>/confirm/", memberships.membership_confirm, name="membership_confirm"),
     path("accounts/register/", registration.signup, name="reader_signup"),
     path("accounts/register/done/", registration.signup_done, name="reader_signup_done"),
     path("accounts/register/confirm/<str:token>/", registration.confirm_signup, name="reader_signup_confirm"),
@@ -18,11 +22,14 @@ urlpatterns = [
     path("settings/theme/", account_views.theme_change, name="theme_change"),
     path("settings/image/<str:kind>/", account_views.appearance_image, name="appearance_image"),
     path("staff/accounts/", account_views.account_list, name="account_list"),
+    path("staff/accounts/bulk/", account_views.account_bulk, name="account_bulk"),
     path("staff/accounts/add/", account_views.account_add, name="account_add"),
+    path("staff/accounts/<int:user_id>/password/", account_views.account_reset_password, name="account_reset_password"),
     path("staff/accounts/<int:user_id>/", account_views.account_detail, name="account_detail"),
     path("reader/loans/<int:loan_id>/", views.reader_loan_detail, name="reader_loan_detail"),
     path("staff/readers/", reader_views.reader_list, name="reader_list"),
     path("staff/readers/add/", reader_views.reader_add, name="reader_add"),
+    path("staff/readers/<int:reader_id>/", reader_views.reader_detail, name="reader_detail"),
     path("staff/readers/<int:reader_id>/edit/", reader_views.reader_edit, name="reader_edit"),
     path("", views.home, name="home"),
     path("health/", views.health, name="health"),

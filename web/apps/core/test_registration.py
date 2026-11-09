@@ -70,7 +70,7 @@ class ReaderRegistrationTests(TestCase):
         self.assertEqual(entry.status,"approved")
         self.assertTrue(entry.user.is_active)
         self.assertEqual(list(entry.user.groups.values_list("name",flat=True)),["reader"])
-        self.assertTrue(entry.user.reader_profile.card_is_current)
+        self.assertFalse(entry.user.reader_profile.card_is_current)
         self.assertEqual(entry.reviewed_by,self.admin)
         self.assertTrue(AccountSecurityEvent.objects.filter(subject=entry.user,actor=self.admin,details__decision="approved").exists())
         self.assertContains(self.review(entry),"Yêu cầu đã được xử lý")

@@ -70,15 +70,23 @@ def role_inspector(request):
 @staff_mfa_required
 @permission_required("core.manage_system_operations",raise_exception=True)
 def operations(request):
+    return render_operations(request)
+
+
+def render_operations(request, *, dashboard=False):
+    if not request.user.has_perm("core.manage_system_operations"):
+        return HttpResponseForbidden()
     config,_=SystemConfiguration.objects.get_or_create(pk=1)
     form=ConfigurationForm(request.POST if request.method=="POST" else None,instance=config)
     if request.method=="POST" and form.is_valid():
         with transaction.atomic():
             obj=form.save(commit=False);obj.updated_by=request.user;obj.save()
             record_security_event(request.user,AccountSecurityEvent.Kind.SYSTEM_OPERATION,request.user,reason=form.cleaned_data["reason"])
-        messages.success(request,"Đã lưu cấu hình thông báo.");return redirect("operations")
+        messages.success(request, "Đã lưu cấu hình hệ thống.")
+        return redirect("staff_dashboard" if dashboard else "operations")
     from apps.library.payments import momo_keys, vnpay_keys
-    return render(request,"core/operations.html",{"form":form,"events":AccountSecurityEvent.objects.select_related("subject","actor")[:100],"email_backend":settings.EMAIL_BACKEND.rsplit(".",1)[-1],"momo_ready":all(momo_keys()),"vnpay_ready":all(vnpay_keys()),"users":get_user_model().objects.filter(is_active=True).order_by("username")[:200]})
+    template = "core/admin_dashboard.html" if dashboard else "core/operations.html"
+    return render(request,template,{"form":form,"events":AccountSecurityEvent.objects.select_related("subject","actor")[:100],"email_backend":settings.EMAIL_BACKEND.rsplit(".",1)[-1],"momo_ready":all(momo_keys()),"vnpay_ready":all(vnpay_keys()),"users":get_user_model().objects.filter(is_active=True).order_by("username")[:200]})
 
 @never_cache
 @staff_mfa_required
@@ -110,7 +118,7 @@ def restore_rehearsal(request):
             record_security_event(request.user,AccountSecurityEvent.Kind.SYSTEM_OPERATION,request.user,reason="Phục hồi thử: "+form.cleaned_data["reason"])
         except Exception:
             form.add_error(None,"Không phục hồi được. Cần bản sao lưu hợp lệ, đúng phiên bản ứng dụng. Dữ liệu đang chạy không bị thay đổi.")
-    return render(request,"core/operation_form.html",{"form":form,"heading":"Phục hồi thử & kiểm tra bản sao lưu","description":"Tạo cơ sở dữ liệu cô lập, nạp bản sao lưu rồi đối chiếu. Website đang chạy không bị ghi đè. Khôi phục chính thức cần cửa sổ bảo trì và người vận hành thực hiện theo quy trình.","submit":"Phục hồi thử","result":result})
+    return render(request,"core/operation_form.html",{"form":form,"heading":"Phục hồi thử & kiểm tra bản sao lưu","description":"Tạo cơ sở dữ liệu cô lập, nạp bản sao lưu rồi đối chiếu. Website đang chạy không bị ghi đè. Khôi phục chính thức cần cửa sổ bảo trì và người vận hành thực hiện theo quy trình.","submit":"Phục hồi thử","result":result,"show_official_restore":True})
 
 @never_cache
 @staff_mfa_required

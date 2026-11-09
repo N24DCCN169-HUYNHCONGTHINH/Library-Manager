@@ -6,6 +6,7 @@ from django.db import transaction
 from django.utils import timezone
 
 from apps.library.models import Loan, LoanNotification
+from apps.library.services import prepare_loan_notifications
 
 
 class Command(BaseCommand):
@@ -19,14 +20,8 @@ class Command(BaseCommand):
         config = SystemConfiguration.objects.filter(pk=1).first()
         reminder_days = config.reminder_days if config else 3
         today = timezone.localdate()
-        prepared = sent = failed = 0
-        for loan in Loan.objects.filter(status=Loan.Status.OPEN).iterator():
-            due_day = timezone.localtime(loan.due_at).date()
-            delta = (today - due_day).days
-            kind = "upcoming" if delta == -reminder_days else "due" if delta == 0 else "overdue" if delta > 0 and delta % 3 == 0 else None
-            if kind:
-                _, created = LoanNotification.objects.get_or_create(loan=loan, due_at=loan.due_at, reminder_date=today, defaults={"kind": kind})
-                prepared += int(created)
+        prepared = prepare_loan_notifications(reminder_days)
+        sent = failed = 0
         if options["send"] and (config is None or config.notifications_enabled):
             # Serialize delivery per notice. A crash after provider acceptance can still
             # cause a retry; this is an outbox, not an exactly-once email guarantee.

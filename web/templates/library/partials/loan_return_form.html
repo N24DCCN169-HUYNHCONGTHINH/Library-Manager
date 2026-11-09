@@ -1,0 +1,11 @@
+<form method="post" action="?tab=loans&amp;loan_q=%23{{ loan.pk }}#return" class="desk-action-form">{% csrf_token %}<input type="hidden" name="action" value="return">
+{{ return_form.non_field_errors }}
+{{ return_form.idempotency_key.errors }}
+{{ return_form.idempotency_key }}
+<input type="hidden" name="barcode" value="{{ loan.copy.barcode }}">{{ return_form.barcode.errors }}
+<details class="review-disclosure" {% if return_form.condition_kind.value or return_form.condition_note.value or return_form.condition_kind.errors or return_form.condition_note.errors %}open{% endif %}>
+  <summary>Ghi nhận tình trạng sách (nếu cần)</summary>
+  <p>{{ return_form.condition_kind.label_tag }} {{ return_form.condition_kind }} {{ return_form.condition_kind.errors }}</p>
+  <p>{{ return_form.condition_note.label_tag }} {{ return_form.condition_note }} {{ return_form.condition_note.errors }}</p>
+</details>
+<button type="submit">Xác nhận đã nhận sách</button></form>

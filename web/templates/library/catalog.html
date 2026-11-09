@@ -1,8 +1,10 @@
 {% extends "base.html" %}
 {% block title %}Tra cứu danh mục · Quản lý thư viện{% endblock %}
 {% block content %}
-<section class="card search-panel">
+<div class="catalog-layout">
+<section class="card search-panel catalog-search-panel">
   <h1>Tra cứu danh mục</h1>
+  {% if is_reader or not request.user.is_authenticated %}<p><a class="btn btn-outline-primary" href="{% url 'membership_plans' %}">Gói thẻ thành viên</a></p>{% endif %}
   {% for message in messages %}<p role="status">{{ message }}</p>{% endfor %}
   <form method="get">
     <div><label for="q">Nhan đề, tác giả, ISBN, mã xếp giá hoặc mã bản sách</label>
@@ -14,7 +16,8 @@
     </select></div>
     <button type="submit">Tìm</button>
   </form>
-</section><p class="muted">{{ page_obj.paginator.count }} đầu sách · Trang {{ page_obj.number }} / {{ page_obj.paginator.num_pages }}</p><div class="catalog-grid">
+</section>
+<section class="catalog-results" aria-label="Kết quả tra cứu"><p class="muted">{{ page_obj.paginator.count }} đầu sách · Trang {{ page_obj.number }} / {{ page_obj.paginator.num_pages }}</p><div class="catalog-grid">
   {% for book in books %}
     <article class="card book-card">{% if book.has_cover %}<img class="catalog-cover-image" src="{% url 'library:cover_image' book.pk %}?v={{ book.updated_at|date:'U' }}" alt="Bìa {{ book.title }}">{% else %}<div class="book-cover" aria-hidden="true"><span>▤</span></div>{% endif %}<div class="book-body"><div class="book-code">{{ book.catalog_number }}</div><span class="badge {% if book.available_copies_count %}bg-teal-lt{% else %}bg-orange-lt{% endif %}">{% if book.available_copies_count %}Có bản sẵn sàng{% else %}Chưa có bản sẵn sàng{% endif %}</span>
       <h2>{{ book.title }}</h2>
@@ -27,16 +30,40 @@
       {% if is_reader and selected_branch and book.available_copies_count == 0 and book.has_available_copies_anywhere %}<p>Có bản sẵn sàng tại cơ sở khác; hãy chọn “Tất cả cơ sở” để xem vị trí.</p>{% endif %}
       {% if not book.has_loanable_copies %}
         <p>Hiện không có bản được phép mượn về. Trạng thái “Sẵn sàng” cho biết bản có tại cơ sở.</p>
-      {% elif not request.user.is_authenticated %}
-        <p>Đăng nhập bằng tài khoản độc giả để yêu cầu mượn hoặc đặt trước.</p>
-      {% elif not is_reader %}
+      {% elif not request.user.is_authenticated and not member_can_reserve %}
+        <p>Khách cần mua gói 1 ngày trước khi yêu cầu mượn hoặc đặt trước.</p>
+      {% elif request.user.is_authenticated and not is_reader %}
         <p>Tài khoản hiện tại không có vai trò độc giả để yêu cầu mượn hoặc đặt trước.</p>
       {% elif book.available_copies_count and not book.has_available_loanable_copies %}
         <p>Các bản đang sẵn sàng không được mượn về. Bạn có thể đặt trước bản đủ điều kiện.</p>
       {% endif %}
-      {% if is_reader and book.has_loanable_copies %}<form method="post" action="{% url 'library:reserve' book.id %}">{% csrf_token %}<button type="submit">{% if book.has_available_loanable_copies %}Yêu cầu mượn{% else %}Đặt trước{% endif %}</button></form>{% endif %}
+      {% if member_can_reserve and book.pickup_can_request %}
+        <form method="post" action="{% url 'library:reserve' book.id %}">
+          {% csrf_token %}
+          {% if book.pickup_branches %}
+            <label for="pickup-{{ book.pk }}">Cơ sở nhận sách</label>
+            <select id="pickup-{{ book.pk }}" name="branch">
+              <option value="">Bất kỳ cơ sở nào</option>
+              {% for branch in book.pickup_branches %}<option value="{{ branch.pk }}"{% if selected_branch == branch.pk|stringformat:"s" %} selected{% endif %}>{{ branch.name }}</option>{% endfor %}
+            </select>
+          {% endif %}
+          <fieldset class="reservation-duration">
+            <legend>Thời lượng muốn mượn</legend>
+            <div class="reservation-duration-fields">
+              <div><label for="loan-days-{{ book.pk }}">Ngày</label><input id="loan-days-{{ book.pk }}" type="number" name="loan_days" min="0" max="32767"></div>
+              <div><label for="loan-hours-{{ book.pk }}">Giờ</label><input id="loan-hours-{{ book.pk }}" type="number" name="loan_hours" min="0" max="23"></div>
+              <div><label for="loan-minutes-{{ book.pk }}">Phút</label><input id="loan-minutes-{{ book.pk }}" type="number" name="loan_minutes" min="0" max="59"></div>
+              <div><label for="loan-seconds-{{ book.pk }}">Giây</label><input id="loan-seconds-{{ book.pk }}" type="number" name="loan_seconds" min="0" max="59"></div>
+            </div>
+            <small class="muted">Tính từ lúc nhận sách. Để trống cả bốn ô để dùng thời hạn mặc định.</small>
+          </fieldset>
+          <button type="submit">{% if book.pickup_available %}Yêu cầu mượn / đặt trước{% else %}Đặt trước{% endif %}</button>
+        </form>
+      {% endif %}
     </div></article>
   {% empty %}<p class="empty-state">Không tìm thấy đầu sách phù hợp.</p>{% endfor %}
 </div>
 <nav class="pagination-line" aria-label="Phân trang danh mục">{% if page_obj.has_previous %}<a class="btn btn-outline-primary" href="?q={{ query|urlencode }}&amp;branch={{ selected_branch|urlencode }}&amp;page={{ page_obj.previous_page_number }}">← Trang trước</a>{% endif %}<span>Trang {{ page_obj.number }} / {{ page_obj.paginator.num_pages }}</span>{% if page_obj.has_next %}<a class="btn btn-outline-primary" href="?q={{ query|urlencode }}&amp;branch={{ selected_branch|urlencode }}&amp;page={{ page_obj.next_page_number }}">Trang sau →</a>{% endif %}</nav>
+</section>
+</div>
 {% endblock %}

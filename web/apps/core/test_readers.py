@@ -94,7 +94,7 @@ class ReaderManagementTests(TestCase):
         self.login()
         response = self.client.post(reverse("reader_edit", args=[self.profile.pk]), self.edit_data(
             status="suspended", user=self.manager.pk, membership_verified="", is_superuser="on", email="changed@example.invalid"))
-        self.assertRedirects(response, reverse("reader_list"))
+        self.assertRedirects(response, reverse("reader_detail", args=[self.profile.pk]))
         self.profile.refresh_from_db()
         self.reader.refresh_from_db()
         self.assertEqual(self.profile.status, "suspended")

@@ -1,9 +1,12 @@
 {% extends "base.html" %}
 {% block title %}Quản lý sách · Library Hub{% endblock %}
 {% block content %}
+<div class="book-management-page">
 <div class="page-intro"><div><div class="eyebrow">KHÔNG GIAN TRI THỨC</div><h1>Tủ sách của thư viện</h1><p class="muted">Tìm nhanh, xem tình trạng và chăm chút từng đầu sách.</p></div>{% if perms.library.add_book %}<a class="btn btn-primary" href="{% url 'library:book_add' %}">＋ Thêm sách mới</a>{% endif %}</div>
 {% for message in messages %}<p role="status">{{ message }}</p>{% endfor %}
-<section class="card book-toolbar"><form method="get"><label for="q">Tìm trong tủ sách</label><div class="book-search-line"><input id="q" type="search" name="q" value="{{ query }}" data-lookup="staff_books" data-lookup-mode="navigate" placeholder="Gõ vài chữ: nhan đề, tác giả, mã sách, ISBN…"><button type="submit">Tìm kiếm</button></div></form><div class="book-toolbar-bottom"><p><strong>{{ page_obj.paginator.count }}</strong> đầu sách{% if query %} phù hợp với “{{ query }}” · <a href="{% url 'library:book_list' %}">Xóa bộ lọc</a>{% endif %}</p><div class="view-switch" role="group" aria-label="Cách hiển thị sách"><button type="button" data-book-layout="cards" aria-pressed="true">▦ Dạng thẻ</button><button type="button" data-book-layout="table" aria-pressed="false">☷ Dạng bảng</button></div></div><small class="muted">Gõ từ 2 ký tự để xem gợi ý. Nhấp đúp vào thẻ hoặc dòng để sửa; nút thao tác dùng được trên điện thoại.</small></section>
+<div class="book-management-layout">
+<section class="card book-toolbar" aria-label="Tìm và lọc sách"><form method="get"><label for="q">Tìm trong tủ sách</label><div class="book-search-line"><input id="q" type="search" name="q" value="{{ query }}" data-lookup="staff_books" data-lookup-mode="navigate" placeholder="Gõ vài chữ: nhan đề, tác giả, mã sách, ISBN…"><button type="submit">Tìm kiếm</button></div></form><div class="book-toolbar-bottom"><p><strong>{{ page_obj.paginator.count }}</strong> đầu sách{% if query %} phù hợp với “{{ query }}” · <a href="{% url 'library:book_list' %}">Xóa bộ lọc</a>{% endif %}</p><div class="view-switch" role="group" aria-label="Cách hiển thị sách"><button type="button" data-book-layout="cards" aria-pressed="true">▦ Dạng thẻ</button><button type="button" data-book-layout="table" aria-pressed="false">☷ Dạng bảng</button></div></div><small class="muted">Gõ ký tự đầu tiên để xem gợi ý. Nhấp đúp vào thẻ hoặc dòng để sửa; nút thao tác dùng được trên điện thoại.</small></section>
+<section class="book-management-results" aria-label="Danh sách đầu sách">
 <div id="book-collection" data-layout="cards">
 <div class="managed-book-grid">
 {% for book in page_obj %}<article class="managed-book-card"{% if perms.library.change_book %} data-open-url="{% url 'library:book_edit' book.pk %}"{% endif %}>
@@ -14,4 +17,7 @@
 <div class="table-wrap managed-book-table"><table class="list-table"><thead><tr><th>Đầu sách / tác giả</th><th>Mã danh mục</th><th>Tồn kho</th><th>Trạng thái</th><th>Thao tác</th></tr></thead><tbody>{% for book in page_obj %}<tr{% if perms.library.change_book %} data-open-url="{% url 'library:book_edit' book.pk %}"{% endif %}><td><strong>{{ book.title }}</strong><small>{{ book.authors }}</small></td><td><code>{{ book.catalog_number }}</code></td><td>{{ book.ready_count }} sẵn sàng / {{ book.copy_count }} bản</td><td>{% if book.is_active %}Đang sử dụng{% else %}Ngừng sử dụng{% endif %}</td><td><a href="{% url 'library:copies' book.pk %}">Xem bản sách</a>{% if perms.library.change_book %} · <a href="{% url 'library:book_edit' book.pk %}">Sửa thông tin</a>{% endif %}</td></tr>{% empty %}<tr><td colspan="5">Không tìm thấy sách.</td></tr>{% endfor %}</tbody></table></div>
 </div>
 <nav class="pagination-line" aria-label="Phân trang sách">{% if page_obj.has_previous %}<a class="btn btn-outline-primary" href="?q={{ query|urlencode }}&amp;page={{ page_obj.previous_page_number }}">← Trang trước</a>{% endif %}<span>Trang {{ page_obj.number }} / {{ page_obj.paginator.num_pages }}</span>{% if page_obj.has_next %}<a class="btn btn-outline-primary" href="?q={{ query|urlencode }}&amp;page={{ page_obj.next_page_number }}">Trang sau →</a>{% endif %}</nav>
+</section>
+</div>
+</div>
 {% endblock %}

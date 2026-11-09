@@ -4,11 +4,20 @@
 <section class="card form-card">
   <h1>{% if profile %}Sửa hồ sơ {{ profile.reader_number }}{% else %}Thêm độc giả{% endif %}</h1>
   {% if profile %}
-    <p>Tài khoản: {{ profile.user.username }} · {{ profile.user.email }}. Xác minh thẻ và quản lý đăng nhập được thực hiện trong khu vực quản trị theo quyền được cấp.</p>
+    <p>Tài khoản: {{ profile.user.username }} · {{ profile.user.email }}. </p>
   {% else %}
     <p>Độc giả nhận lời mời có hạn 72 giờ để tự đặt mật khẩu và kích hoạt tài khoản. Nhân viên cần đối chiếu, xác minh thẻ riêng trước khi mượn sách.</p>
   {% endif %}
+  {% if profile %}
+    {% if profile.membership_verified and profile.membership_verified_at %}<p>Thẻ đã xác minh.</p>
+    {% elif can_verify %}
+      <form method="post">{% csrf_token %}<input type="hidden" name="action" value="verify_membership">
+        <button type="submit" class="btn btn-outline-primary">Xác nhận đã đối chiếu hồ sơ và thẻ</button>
+      </form>
+    {% endif %}
+  {% endif %}
   <form method="post">{% csrf_token %}{{ form.as_p }}<button type="submit">{% if profile %}Lưu hồ sơ{% else %}Tạo và gửi lời mời{% endif %}</button></form>
-  <p><a href="{% url 'reader_list' %}">Quay lại danh sách</a></p>
+  <p>{% if profile and perms.core.view_readerprofile %}<a href="{% url 'reader_detail' profile.pk %}">Quay lại hồ sơ</a>{% else %}<a href="{% url 'reader_list' %}">Quay lại danh sách</a>{% endif %}</p>
 </section>
+{% if profile and history_sections %}{% include "core/reader_history.html" %}{% endif %}
 {% endblock %}

@@ -81,3 +81,19 @@ Chưa đăng ký Scheduled Task tự động. Khi có máy chủ: dùng tài kho
 5. Cấu hình HSTS bắt đầu ngắn, chỉ mở rộng/includeSubDomains/preload sau khi xác nhận tất cả hostname liên quan phục vụ HTTPS. Không đánh dấu triển khai công khai hoàn tất khi chưa kiểm tra DNS/chứng chỉ/đăng nhập/MFA/CSRF từ máy khác.
 
 Nguồn kỹ thuật: [Django dumpdata/loaddata](https://docs.djangoproject.com/en/6.0/ref/django-admin/), [Caddy HTTPS](https://caddyserver.com/docs/automatic-https), [skip_install_trust](https://caddyserver.com/docs/caddyfile/options#skip_install_trust), [Waitress](https://docs.pylonsproject.org/projects/waitress/en/stable/).
+
+## Phục hồi chính thức bằng cơ sở dữ liệu mới
+
+1. Kiểm tra bản ZIP bằng **Phục hồi thử** và lưu một bản sao mới của hệ thống đang phục vụ.
+2. Tạo PostgreSQL đích trống, dùng URL trực tiếp của tài khoản có quyền chạy migration và nạp dữ liệu. Đặt URL trong biến môi trường riêng `LIBRARY_RESTORE_TARGET_URL`.
+3. Trong thư mục `web`, chạy:
+
+   ```powershell
+   .\.venv\Scripts\python.exe manage.py prepare_library_restore --backup "D:/sao-luu/library-backup.zip" --output "D:/sao-luu/restore-staging"
+   ```
+
+4. Kiểm tra `verification.json` có `verified: true`. Thư mục kết quả chứa dữ liệu cá nhân, chỉ lưu ở nơi được kiểm soát. Nếu có `media/`, chuẩn bị đường dẫn media tương ứng cho phiên bản sẽ chuyển sang.
+5. Trong thời gian bảo trì, dừng web và tác vụ ghi dữ liệu. Đổi URL chạy web sang vai trò ứng dụng của đích, đổi URL migration và cấu hình tác vụ định kỳ tương ứng. Kiểm tra đăng nhập, kho sách, phiếu mượn và media trước khi mở lại.
+6. Giữ cấu hình và cơ sở dữ liệu cũ để quay lại nếu kiểm tra thất bại. Nếu đã mở hệ thống cho ghi dữ liệu trên đích, cần đối chiếu các giao dịch mới trước khi quay lại.
+
+Lệnh chuẩn bị kiểm tra đích trống và từ chối URL trùng cơ sở dữ liệu hiện tại. Lệnh chỉ nạp dữ liệu vào đích mới. Việc chuyển URL và media do người vận hành thực hiện.

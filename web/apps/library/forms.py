@@ -1,8 +1,9 @@
+from datetime import timedelta
 from django import forms
 from django.utils import timezone
 from uuid import uuid4
 
-from .models import Book
+from .models import Book, LibraryBranch
 
 
 class BookForm(forms.ModelForm):
@@ -69,6 +70,15 @@ class CheckoutForm(forms.Form):
     reader_number = forms.CharField(label="Mã bạn đọc", max_length=32, widget=forms.TextInput(attrs={"data-lookup": "readers", "placeholder": "Gõ tên hoặc mã bạn đọc…"}))
     barcode = forms.CharField(label="Mã vạch bản sách", max_length=64, widget=forms.TextInput(attrs={"data-lookup": "copies", "placeholder": "Quét mã hoặc gõ tên sách…"}))
 
+    loan_days = forms.IntegerField(
+        label="Số ngày mượn", required=False, min_value=0, max_value=32767,
+        help_text="Để trống cả bốn ô để dùng thời hạn mặc định. Nhập giờ, phút hoặc giây để tính hạn trả chính xác từ lúc xác nhận.",
+    )
+
+    loan_hours = forms.IntegerField(label="Giờ mượn", required=False, min_value=0, max_value=23)
+    loan_minutes = forms.IntegerField(label="Phút mượn", required=False, min_value=0, max_value=59)
+    loan_seconds = forms.IntegerField(label="Giây mượn", required=False, min_value=0, max_value=59)
+
 
 class ReturnForm(forms.Form):
     idempotency_key = forms.UUIDField(initial=uuid4, widget=forms.HiddenInput)
@@ -80,6 +90,22 @@ class ReturnForm(forms.Form):
 class RenewalForm(forms.Form):
     idempotency_key = forms.UUIDField(initial=uuid4, widget=forms.HiddenInput)
     loan_id = forms.IntegerField(label="Mã lượt mượn", min_value=1, widget=forms.TextInput(attrs={"data-lookup": "loans", "placeholder": "Tìm bằng tên sách, mã bản hoặc mã bạn đọc…"}))
+
+    extension_days = forms.IntegerField(
+        label="Số ngày gia hạn", required=False, min_value=0, max_value=32767,
+        help_text="Để trống cả bốn ô để dùng thời lượng mặc định. Thời lượng tùy chỉnh cộng vào hạn trả hiện tại.",
+    )
+    extension_hours = forms.IntegerField(label="Số giờ gia hạn", required=False, min_value=0, max_value=23)
+    extension_minutes = forms.IntegerField(label="Số phút gia hạn", required=False, min_value=0, max_value=59)
+    extension_seconds = forms.IntegerField(label="Số giây gia hạn", required=False, min_value=0, max_value=59)
+
+    def clean(self):
+        data = super().clean()
+        units = ("days", "hours", "minutes", "seconds")
+        values = {unit: data.get(f"extension_{unit}") for unit in units}
+        if any(value is not None for value in values.values()):
+            data["extension"] = timedelta(**{unit: value or 0 for unit, value in values.items()})
+        return data
 
 
 class FinePaymentForm(forms.Form):
@@ -101,3 +127,33 @@ class DamageQuoteForm(forms.Form):
     repair_cost = forms.DecimalField(label="Chi phí sửa chữa có chứng từ", required=False, decimal_places=0, max_digits=10, min_value=1)
     appraisal_amount = forms.DecimalField(label="Tổng mức được hội đồng phê duyệt", required=False, decimal_places=0, max_digits=12, min_value=0)
     source = forms.CharField(label="Nguồn giá, ngày, tỷ giá (nếu có) và căn cứ lựa chọn mức", max_length=2000, widget=forms.Textarea(attrs={"rows": 3}))
+
+
+class DamageApprovalForm(forms.Form):
+    case_id = forms.IntegerField(min_value=1, widget=forms.HiddenInput)
+    replacement_amount = forms.DecimalField(label="Mức bồi thường", min_value=0, max_digits=12, decimal_places=0)
+    processing_fee = forms.DecimalField(label="Phí xử lý", min_value=0, max_digits=10, decimal_places=0, initial=0)
+    reason = forms.CharField(label="Căn cứ phê duyệt", max_length=2000, widget=forms.Textarea(attrs={"rows": 2}))
+
+
+class ReservationRequestForm(forms.Form):
+    branch = forms.ModelChoiceField(queryset=LibraryBranch.objects.filter(is_active=True), required=False)
+    loan_days = forms.IntegerField(required=False, min_value=0, max_value=32767)
+    loan_hours = forms.IntegerField(required=False, min_value=0, max_value=23)
+    loan_minutes = forms.IntegerField(required=False, min_value=0, max_value=59)
+    loan_seconds = forms.IntegerField(required=False, min_value=0, max_value=59)
+
+    def clean(self):
+        data = super().clean()
+        hours = data.pop("loan_hours", None)
+        minutes = data.pop("loan_minutes", None)
+        seconds = data.pop("loan_seconds", None)
+        if any(value is not None for value in (hours, minutes, seconds)):
+            duration = timedelta(days=data.get("loan_days") or 0, hours=hours or 0, minutes=minutes or 0, seconds=seconds or 0)
+            if not duration:
+                raise forms.ValidationError("Thời lượng mượn phải lớn hơn 0.")
+            data["exact_duration"] = duration
+            data["loan_days"] = None
+        elif data.get("loan_days") == 0:
+            self.add_error("loan_days", "Số ngày mượn phải lớn hơn 0.")
+        return data

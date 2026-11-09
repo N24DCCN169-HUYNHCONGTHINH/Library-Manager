@@ -1,3 +1,5 @@
+from uuid import uuid4
+
 from django.conf import settings
 from django.core.validators import RegexValidator
 from django.db import models
@@ -52,6 +54,7 @@ class AccountSecurity(models.Model):
     )
     verified_email = models.EmailField("email đã xác minh", blank=True)
     email_verified_at = models.DateTimeField("xác minh lúc", null=True, blank=True)
+    archived_was_active = models.BooleanField(null=True, default=None, editable=False)
     must_change_password = models.BooleanField("bắt buộc đổi mật khẩu", default=False)
     password_lockout_exempt = models.BooleanField("miễn khóa sai mật khẩu khi thử nghiệm", default=False)
     created_at = models.DateTimeField("tạo lúc", auto_now_add=True)
@@ -103,7 +106,21 @@ class ReaderProfile(models.Model):
         "mã bạn đọc", max_length=32, unique=True,
         validators=[RegexValidator(r"^[A-Za-z0-9_-]+$", "Chỉ dùng chữ, số, dấu gạch ngang hoặc gạch dưới.")],
     )
+    is_guest = models.BooleanField(default=False, db_default=False, editable=False)
+    requires_paid_plan = models.BooleanField(default=False, db_default=False, editable=False)
+    membership_expires_at = models.DateTimeField(null=True, blank=True, editable=False)
     reader_type = models.CharField("loại bạn đọc", max_length=16, choices=ReaderType.choices)
+    address = models.CharField("địa chỉ", max_length=300, blank=True, db_default="")
+    citizen_id = models.CharField(
+        "số căn cước công dân", max_length=12, blank=True, db_default="",
+        validators=[RegexValidator(r"\A[0-9]{12}\Z", "Số căn cước phải có đúng 12 chữ số.")],
+    )
+    citizen_id_issued_on = models.DateField("ngày cấp căn cước công dân", null=True, blank=True)
+    contact_email = models.EmailField("email liên hệ", blank=True, db_default="")
+    phone_number = models.CharField(
+        "số điện thoại", max_length=32, blank=True, db_default="",
+        validators=[RegexValidator(r"\A\+?[0-9][0-9 ().-]*\Z", "Nhập số điện thoại hợp lệ.")],
+    )
     status = models.CharField("trạng thái thẻ", max_length=16, choices=Status.choices, default=Status.ACTIVE)
     valid_from = models.DateField("có hiệu lực từ")
     valid_until = models.DateField("có hiệu lực đến")
@@ -138,7 +155,11 @@ class ReaderProfile(models.Model):
     @property
     def card_is_current(self):
         today = timezone.localdate()
-        return self.membership_verified and self.status == self.Status.ACTIVE and self.valid_from <= today <= self.valid_until
+        if not (self.membership_verified and self.status == self.Status.ACTIVE and self.valid_from <= today <= self.valid_until):
+            return False
+        if self.requires_paid_plan or self.membership_expires_at:
+            return self.membership_expires_at is not None and self.membership_expires_at > timezone.now()
+        return True
 
 
 class AccountInvitation(models.Model):
@@ -239,3 +260,34 @@ class ReaderRegistration(models.Model):
     class Meta:
         ordering = ["-submitted_at", "-pk"]
         permissions = [("approve_reader_registration", "Can approve public reader registrations")]
+
+
+class MembershipPurchase(models.Model):
+    reader = models.ForeignKey(ReaderProfile, on_delete=models.PROTECT, related_name="membership_purchases")
+    plan = models.CharField(max_length=12, choices=[("day", "1 ngày"), ("week", "1 tuần"), ("month", "1 tháng"), ("half_year", "6 tháng"), ("year", "1 năm")])
+    amount = models.PositiveIntegerField()
+    created_at = models.DateTimeField(auto_now_add=True)
+    paid_at = models.DateTimeField(null=True, blank=True)
+    paid_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, null=True, blank=True)
+    expires_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        constraints = [models.UniqueConstraint(
+            fields=["reader"], condition=Q(paid_at__isnull=True), name="unique_pending_membership_purchase",
+        )]
+
+
+class MembershipSandboxPayment(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid4, editable=False)
+    purchase = models.ForeignKey(MembershipPurchase, on_delete=models.PROTECT, related_name="sandbox_payments")
+    created_at = models.DateTimeField(auto_now_add=True)
+    expires_at = models.DateTimeField()
+    completed_at = models.DateTimeField(null=True, blank=True)
+    provider_transaction = models.CharField(max_length=30, null=True, blank=True, unique=True)
+    result_code = models.CharField(max_length=10, blank=True)
+    successful = models.BooleanField(default=False)
+
+    class Meta:
+        constraints = [models.UniqueConstraint(
+            fields=["purchase"], condition=Q(successful=True), name="unique_successful_membership_sandbox_payment",
+        )]

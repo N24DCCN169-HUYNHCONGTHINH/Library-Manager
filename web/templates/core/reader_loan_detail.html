@@ -4,7 +4,7 @@
 <section class="card">
   <h1>{{ loan.copy.book.title }}</h1>
   <p>Lượt #{{ loan.pk }} · Bản {{ loan.copy.barcode }} · {{ loan.get_status_display }}</p>
-  <p>Mượn: {{ loan.loaned_at|date:"d/m/Y H:i" }} · Hạn trả: {{ loan.due_at|date:"d/m/Y H:i" }}{% if loan.returned_at %} · Đã trả: {{ loan.returned_at|date:"d/m/Y H:i" }}{% endif %}</p>
+  <p>Mượn: {{ loan.loaned_at|date:"d/m/Y H:i" }} · Hạn trả: {{ loan.due_at|date:"d/m/Y H:i:s" }}{% if loan.returned_at %} · Đã trả: {{ loan.returned_at|date:"d/m/Y H:i" }}{% endif %}</p>
   {% if loan.status == "open" %}
     {% if return_requested %}
       <p>Đã yêu cầu trả. Vui lòng mang sách tới quầy. Hạn trả vẫn theo phiếu cho đến khi thủ thư nhận sách.</p>

@@ -1,11 +1,17 @@
 {% extends "base.html" %}
 {% block title %}Mượn / trả sách · Library Hub{% endblock %}
-{% block content %}<div class="page-intro"><div><div class="eyebrow">KHÔNG GIAN LƯU THÔNG</div><h1>Mượn / trả sách</h1><p class="muted">Mỗi nghiệp vụ một không gian riêng, thao tác rõ ràng và dễ theo dõi.</p></div><a class="btn btn-outline-primary" href="{% url 'library:catalog' %}">Tra cứu sách →</a></div>
+{% block content %}<div class="page-intro"><div><div class="eyebrow">KHÔNG GIAN LƯU THÔNG</div><h1>Mượn / trả sách</h1><p class="muted">Mở Phiếu mượn để tra cứu phiếu và nhận trả sách.</p></div><a class="btn btn-outline-primary" href="{% url 'library:catalog' %}">Tra cứu sách →</a></div>
 {% for message in messages %}<p role="status">{{ message }}</p>{% endfor %}
-<div id="desk-workspace" data-active-tab="{{ active_tab }}"><nav class="desk-tabs" aria-label="Nghiệp vụ tại quầy"><a href="?tab=checkout" data-desk-tab="checkout" {% if active_tab == 'checkout' %}aria-current="page"{% endif %}><span>↗</span>Mượn sách</a><a href="?tab=return" data-desk-tab="return" {% if active_tab == 'return' %}aria-current="page"{% endif %}><span>↙</span>Trả sách</a><a href="?tab=loans" data-desk-tab="loans" {% if active_tab == 'loans' %}aria-current="page"{% endif %}><span>▤</span>Phiếu mượn</a><a href="?tab=renew" data-desk-tab="renew" {% if active_tab == 'renew' %}aria-current="page"{% endif %}><span>↻</span>Gia hạn</a><a href="?tab=damage" data-desk-tab="damage" {% if active_tab == 'damage' %}aria-current="page"{% endif %}><span>◇</span>Mất / hỏng</a><a href="?tab=overdue" data-desk-tab="overdue" {% if active_tab == 'overdue' %}aria-current="page"{% endif %}><span>◷</span>Quá hạn</a><a href="?tab=notices" data-desk-tab="notices" {% if active_tab == 'notices' %}aria-current="page"{% endif %}><span>♧</span>Nhắc hạn</a><a href="?tab=reservations" data-desk-tab="reservations" {% if active_tab == 'reservations' %}aria-current="page"{% endif %}><span>▣</span>Đặt trước</a><a href="?tab=fines" data-desk-tab="fines" {% if active_tab == 'fines' %}aria-current="page"{% endif %}><span>₫</span>Khoản phạt</a></nav><div class="desk-working-grid" data-desk-working-grid><div class="desk-working-forms"><section class="card desk-panel" data-desk-panel="checkout" id="checkout" {% if active_tab != 'checkout' %}hidden{% endif %}><div class="workspace-heading"><div class="workspace-symbol">↗</div><div><h2>Ghi nhận mượn</h2><p class="muted">Tìm độc giả, chọn bản sách hoặc quét mã vạch. Giao dịch chỉ ghi khi bạn xác nhận.</p></div></div>{% if perms.library.checkout_loan %}<form method="post" class="desk-action-form">{% csrf_token %}<input type="hidden" name="action" value="checkout">{{ checkout_form.as_p }}<button type="submit">Xác nhận mượn →</button></form>{% else %}<p>Tài khoản chưa được cấp quyền thực hiện nghiệp vụ này.</p>{% endif %}</section><section class="card desk-panel" data-desk-panel="return" id="return" {% if active_tab != 'return' %}hidden{% endif %}><div class="workspace-heading"><div class="workspace-symbol">↙</div><div><h2>Nhận trả sách</h2><p class="muted">Quét mã bản đã nhận và ghi rõ tình trạng. Hao mòn tự nhiên không tạo khoản bồi thường.</p></div></div>{% if perms.library.return_loan %}<form method="post" class="desk-action-form">{% csrf_token %}<input type="hidden" name="action" value="return">{{ return_form.as_p }}<button type="submit">Xác nhận đã nhận sách</button></form>{% else %}<p>Tài khoản chưa được cấp quyền thực hiện nghiệp vụ này.</p>{% endif %}</section><section class="card desk-panel" data-desk-panel="loans" id="open-loans" {% if active_tab != 'loans' %}hidden{% endif %}><div class="workspace-heading"><div class="workspace-symbol">▤</div><div><h2>Phiếu mượn đang mở</h2><p class="muted">Tối đa 50 phiếu, ưu tiên hạn trả gần nhất. Nhấp đúp hoặc chọn Xem phiếu để xem chi tiết.</p></div></div><form method="get" class="desk-action-form" role="search" aria-label="Tìm phiếu mượn">
+<div id="desk-workspace" data-active-tab="{{ active_tab }}"><nav class="desk-tabs" aria-label="Nghiệp vụ tại quầy"><a href="?tab=checkout" data-desk-tab="checkout" {% if active_tab == 'checkout' %}aria-current="page"{% endif %}><span>↗</span>Mượn sách</a><a href="?tab=reservations" data-desk-tab="reservations" {% if active_tab == 'reservations' %}aria-current="page"{% endif %}><span>▣</span>Giao sách đã đặt</a>
+<a href="?tab=loans" data-desk-tab="loans" {% if active_tab == 'loans' %}aria-current="page"{% endif %}><span>▤</span>Phiếu mượn</a>
+</nav><div class="desk-working-grid" data-desk-working-grid><div class="desk-working-forms">{% if active_tab == 'checkout' %}<section class="card desk-panel" data-desk-panel="checkout" id="checkout" {% if active_tab != 'checkout' %}hidden{% endif %}><div class="workspace-heading"><div class="workspace-symbol">↗</div><div><h2>Ghi nhận mượn</h2><p class="muted">1. Chọn độc giả. 2. Chọn bản sách hoặc quét mã vạch. 3. Xác nhận mượn.</p></div></div>{% if perms.library.checkout_loan %}<form method="post" class="desk-action-form">{% csrf_token %}<input type="hidden" name="action" value="checkout">{{ checkout_form.as_p }}
+{% if blocking_damage_case and perms.library.view_damagecase %}
+  <p><a href="?tab=loans&amp;operation=damage&amp;case={{ blocking_damage_case }}#damage-case-{{ blocking_damage_case }}">Mở hồ sơ mất/hỏng #{{ blocking_damage_case }}</a></p>
+{% endif %}<button type="submit">Xác nhận mượn →</button></form>{% else %}<p>Tài khoản chưa được cấp quyền thực hiện nghiệp vụ này.</p>{% endif %}</section>{% elif active_tab == 'loans' %}<div data-desk-panel="loans" {% if active_tab != 'loans' %}hidden{% endif %}><section class="card desk-panel" id="open-loans"><div class="workspace-heading"><div class="workspace-symbol">▤</div><div><h2>Danh sách phiếu mượn</h2><p class="muted">Tìm theo số phiếu, mã vạch, tên sách hoặc độc giả. Chọn Nhận trả trên phiếu đang mượn.</p></div></div><form method="get" class="desk-action-form" role="search" aria-label="Tìm phiếu mượn">
   <input type="hidden" name="tab" value="loans">
+  {% if loan_operation %}<input type="hidden" name="operation" value="{{ loan_operation }}">{% endif %}
   <label for="loan-query">Tìm phiếu mượn</label>
-  <input type="search" id="loan-query" name="loan_q" value="{{ loan_query }}" maxlength="100" placeholder="Số phiếu, tên sách, mã vạch, mã bạn đọc hoặc tên đăng nhập">
+  <input type="search" id="loan-query" name="loan_q" data-lookup="loan_history" data-lookup-mode="navigate" value="{{ loan_query }}" maxlength="100" placeholder="Số phiếu, tên sách, mã vạch, tên hoặc mã bạn đọc">
   <label for="loan-status">Tình trạng</label>
   <select id="loan-status" name="loan_status">
     {% for value, label in loan_filter_options %}
@@ -13,11 +19,144 @@
     {% endfor %}
   </select>
   <button type="submit">Tìm và lọc</button>
-  <a href="?tab=loans">Xóa bộ lọc</a>
+
 </form>
-{% include "library/partials/loan_rows.html" with rows=loans %}</section><section class="card desk-panel" data-desk-panel="renew" id="renew" {% if active_tab != 'renew' %}hidden{% endif %}><div class="workspace-heading"><div class="workspace-symbol">↻</div><div><h2>Gia hạn tại quầy</h2><p class="muted">Tìm bằng tên sách, mã bản hoặc mã bạn đọc; hệ thống sẽ kiểm tra điều kiện gia hạn.</p></div></div>{% if perms.library.renew_loan %}<form method="post" class="desk-action-form">{% csrf_token %}<input type="hidden" name="action" value="renew">{{ renewal_form.as_p }}<button type="submit">Kiểm tra và gia hạn</button></form>{% else %}<p>Tài khoản chưa được cấp quyền thực hiện nghiệp vụ này.</p>{% endif %}</section><section class="card desk-panel" data-desk-panel="damage" id="damage" {% if active_tab != 'damage' %}hidden{% endif %}><div class="workspace-heading"><div class="workspace-symbol">◇</div><div><h2>Theo dõi hồ sơ mất / hỏng</h2><p class="muted">Các hồ sơ đã được ghi nhận; mức dự tính không phải khoản thu đã xác nhận.</p></div></div>{% if perms.library.approve_damagecase %}<p><a class="btn btn-primary" href="{% url 'library:damage_quote' %}">Dự tính bồi thường theo biểu phí →</a></p>{% endif %}<div class="table-wrap"><table class="list-table"><thead><tr><th>Hồ sơ</th><th>Tài liệu / độc giả</th><th>Phân loại</th><th>Trạng thái</th></tr></thead><tbody>{% for case in damage_cases %}<tr><td>#{{ case.pk }}<small>{{ case.reported_at|date:"d/m/Y H:i" }}</small></td><td><a href="{% url 'library:staff_loan_detail' case.loan_id %}">{{ case.loan.copy.book.title }}</a><small>{{ case.loan.reader.reader_number }}</small></td><td>{{ case.get_kind_display }}</td><td><span class="badge bg-orange-lt">{{ case.get_status_display }}</span></td></tr>{% empty %}<tr><td colspan="4" class="empty-state">Chưa có hồ sơ mất / hỏng hiển thị.</td></tr>{% endfor %}</tbody></table></div></section><section class="card desk-panel" data-desk-panel="overdue" id="overdue" {% if active_tab != 'overdue' %}hidden{% endif %}><div class="workspace-heading"><div class="workspace-symbol">◷</div><div><h2>Sách đang quá hạn</h2><p class="muted">Ưu tiên liên hệ bạn đọc và theo dõi hồ sơ chạm trần phạt.</p></div></div>{% include "library/partials/loan_rows.html" with rows=overdue_loans %}<details class="review-disclosure"><summary>Mở lại hồ sơ tạm ngưng sau khi đã xử lý</summary>{% if perms.library.manage_reader_restrictions %}<form method="post" class="desk-action-form">{% csrf_token %}<input type="hidden" name="action" value="reopen">{{ reopen_form.as_p }}<button type="submit">Kiểm tra và mở lại hồ sơ</button></form>{% else %}<p>Tài khoản chưa được cấp quyền thực hiện nghiệp vụ này.</p>{% endif %}</details></section><section class="card desk-panel" data-desk-panel="notices" id="notices" {% if active_tab != 'notices' %}hidden{% endif %}><div class="workspace-heading"><div class="workspace-symbol">♧</div><div><h2>Theo dõi nhắc hạn trả</h2><p class="muted">Nhắc trước hạn 3 ngày, vào ngày đến hạn và mỗi 3 ngày quá hạn.</p></div></div>
-<h3>Đến hạn hôm nay và trong 3 ngày tới</h3>
-<p class="muted">Danh sách theo hạn trên phiếu, kể cả khi chưa tạo thông báo.</p>
-{% include "library/partials/loan_rows.html" with rows=due_soon_loans %}
+<nav class="desk-tabs loan-management-tabs" aria-label="Quản lý toàn bộ phiếu mượn">
+  <a href="?tab=loans#open-loans"{% if not loan_operation %} aria-current="page"{% endif %}>Tất cả phiếu</a>
+  {% if perms.library.view_damagecase %}<a class="loan-action-color loan-status-damaged" href="?tab=loans&amp;operation=damage#damage"{% if loan_operation == 'damage' and not selected_damage_case %} aria-current="page"{% endif %}>Mất / hỏng</a>{% endif %}
+  <a class="loan-action-color loan-status-overdue" href="?tab=loans&amp;operation=overdue#overdue"{% if loan_operation == 'overdue' and not loan_query and loan_status == 'overdue' %} aria-current="page"{% endif %}>Quá hạn</a>
+  <a class="loan-action-color loan-status-reminder" href="?tab=loans&amp;operation=notices#notices"{% if loan_operation == 'notices' and not loan_query and loan_status == 'due_soon' %} aria-current="page"{% endif %}>Nhắc hạn</a>
+  <a class="loan-action-color loan-status-overdue" href="?tab=loans&amp;operation=fines#fines"{% if loan_operation == 'fines' and not loan_query %} aria-current="page"{% endif %}>Khoản phạt</a>
+</nav>
+{% if loan_operation == "renew" %}<details class="card review-disclosure" id="renew" {% if loan_operation == "renew" %}open{% endif %}><summary>Gia hạn</summary><div class="workspace-heading"><div class="workspace-symbol">↻</div><div><h2>Gia hạn tại quầy</h2><p class="muted">Tìm bằng tên sách, mã bản hoặc mã bạn đọc; hệ thống sẽ kiểm tra điều kiện gia hạn.</p></div></div>{% if perms.library.renew_loan %}<form method="post" action="?tab=loans&amp;operation=renew#renew" class="desk-action-form">{% csrf_token %}<input type="hidden" name="action" value="renew">{{ renewal_form.as_p }}<button type="submit">Kiểm tra và gia hạn</button></form>{% else %}<p>Tài khoản chưa được cấp quyền thực hiện nghiệp vụ này.</p>{% endif %}</details>{% elif loan_operation == "damage" %}<details class="card review-disclosure" id="damage" {% if loan_operation == "damage" %}open{% endif %}><summary>Mất / hỏng</summary><div class="workspace-heading"><div class="workspace-symbol">◇</div><div><h2>Theo dõi hồ sơ mất / hỏng</h2>{% if selected_damage_case %}<p><a href="?tab=loans&amp;operation=damage#damage">Xem tất cả hồ sơ</a></p>{% elif perms.library.approve_damagecase %}<p>Nhấp đúp một dòng để mở hồ sơ cần xử lý.</p>{% endif %}<p class="muted">Các hồ sơ đã được ghi nhận; mức dự tính không phải khoản thu đã xác nhận.</p></div></div>{% if perms.library.approve_damagecase %}<p><a class="btn btn-primary" href="{% url 'library:damage_quote' %}">Dự tính bồi thường theo biểu phí →</a></p>{% endif %}<div class="table-wrap"><table class="list-table"><thead><tr><th>Hồ sơ</th><th>Tài liệu / độc giả</th><th>Phân loại</th><th>Trạng thái</th></tr></thead><tbody>{% for case in damage_cases %}<tr id="damage-case-{{ case.pk }}"{% if perms.library.approve_damagecase and not selected_damage_case %} data-open-url="?tab=loans&amp;operation=damage&amp;case={{ case.pk }}#damage-case-{{ case.pk }}"{% endif %}><td>#{{ case.pk }}<small>{{ case.reported_at|date:"d/m/Y H:i" }}</small></td><td><a href="{% url 'library:staff_loan_detail' case.loan_id %}">{{ case.loan.copy.book.title }}</a><small>{{ case.loan.reader.reader_number }}</small></td><td>{{ case.get_kind_display }}</td><td><span class="badge bg-orange-lt">{{ case.get_status_display }}</span>
+<small>Bản sách {{ case.loan.copy.barcode }} · {{ case.loan.copy.get_status_display }}</small>
+{% if perms.library.approve_damagecase and case.status == 'open' or perms.library.approve_damagecase and case.status == 'contested' %}
+  <details {% if selected_damage_case == case.pk or damage_approval_form.case_id.value == case.pk|stringformat:"s" %}open{% endif %}>
+    <summary>Duyệt mức bồi thường</summary>
+    <form method="post" action="?tab=loans&amp;operation=damage#damage" class="desk-action-form">
+      {% csrf_token %}
+      <input type="hidden" name="action" value="approve_damage">
+      <input type="hidden" name="case_id" value="{{ case.pk }}">
+      {% if damage_approval_form.case_id.value == case.pk|stringformat:"s" %}
+        {{ damage_approval_form.non_field_errors }}
+        {{ damage_approval_form.replacement_amount.errors }}
+        {{ damage_approval_form.processing_fee.errors }}
+        {{ damage_approval_form.reason.errors }}
+      {% endif %}
+      <label for="replacement-{{ case.pk }}">Mức bồi thường (₫)</label>
+      <input id="replacement-{{ case.pk }}" name="replacement_amount" type="number" min="0" max="999999999999" step="1" required>
+      <label for="processing-{{ case.pk }}">Phí xử lý (₫)</label>
+      <input id="processing-{{ case.pk }}" name="processing_fee" type="number" min="0" max="9999999999" step="1" value="0" required>
+      <label for="approval-reason-{{ case.pk }}">Căn cứ phê duyệt</label>
+      <textarea id="approval-reason-{{ case.pk }}" name="reason" maxlength="2000" rows="2" required></textarea>
+      <button type="submit">Xác nhận duyệt bồi thường</button>
+    </form>
+  </details>
+{% endif %}
+
+{% if perms.library.approve_damagecase %}
+  {% if case.status == 'open' or case.status == 'contested' or case.status == 'approved' and not case.compensation_total %}
+    <details>
+      <summary>Hoàn tất – không thu bồi thường</summary>
+      <form method="post" action="?tab=loans&amp;operation=damage#damage" class="desk-action-form">
+        {% csrf_token %}
+        <input type="hidden" name="action" value="close_damage_no_charge">
+        <input type="hidden" name="case_id" value="{{ case.pk }}">
+        <label for="no-charge-reason-{{ case.pk }}">Lý do không thu</label>
+        <textarea id="no-charge-reason-{{ case.pk }}" name="reason" maxlength="500" rows="2" required></textarea>
+        <button type="submit">Xác nhận hoàn tất hồ sơ</button>
+      </form>
+    </details>
+  {% endif %}
+{% endif %}
+
+{% if perms.library.approve_damagecase and case.pk == case.latest_case_id %}
+  {% if case.loan.copy.status == 'return_review' or case.loan.copy.status == 'damaged' %}
+    <details>
+      <summary>Cập nhật tình trạng bản sách</summary>
+      <form method="post" action="?tab=loans&amp;operation=damage#damage" class="desk-action-form">
+        {% csrf_token %}
+        <input type="hidden" name="action" value="update_copy_condition">
+        <input type="hidden" name="case_id" value="{{ case.pk }}">
+        <label for="copy-status-{{ case.pk }}">Tình trạng sau kiểm tra</label>
+        <select id="copy-status-{{ case.pk }}" name="copy_status" required>
+          <option value="">Chọn tình trạng</option>
+          <option value="available">Sẵn sàng</option>
+          <option value="damaged">Hư hỏng</option>
+        </select>
+        <label for="copy-reason-{{ case.pk }}">Lý do cập nhật</label>
+        <textarea id="copy-reason-{{ case.pk }}" name="reason" maxlength="500" rows="2" required></textarea>
+        <button type="submit">Lưu tình trạng</button>
+      </form>
+    </details>
+  {% endif %}
+{% endif %}
+</td></tr>{% empty %}<tr><td colspan="4" class="empty-state">Chưa có hồ sơ mất / hỏng hiển thị.</td></tr>{% endfor %}</tbody></table></div></details>
+{% elif loan_operation == "overdue" %}<details class="card review-disclosure" id="overdue" {% if loan_operation == "overdue" %}open{% endif %}><summary>Quá hạn</summary><div class="workspace-heading"><div class="workspace-symbol">◷</div><div><h2>Sách đang quá hạn</h2><p class="muted">Mở phiếu để nhận trả hoặc báo mất. Quản lý có thể cập nhật tiền phạt đang phát sinh và tạm ngưng thẻ nếu quá hạn đủ 7 ngày.</p></div></div>{% if perms.library.manage_reader_restrictions %}
+<details class="review-disclosure">
+  <summary>Rà soát tất cả phiếu quá hạn</summary>
+  <p>Thao tác cập nhật tiền phạt và có thể tạm ngưng thẻ theo chính sách.</p>
+  <form method="post" action="?tab=loans&amp;operation=overdue#overdue" class="desk-action-form">
+    {% csrf_token %}<input type="hidden" name="action" value="refresh_overdue">
+    <button type="submit">Xác nhận cập nhật quá hạn</button>
+  </form>
+</details>
+{% endif %}
+<details class="review-disclosure"><summary>Mở lại hồ sơ tạm ngưng sau khi đã xử lý</summary>{% if perms.library.manage_reader_restrictions %}<form method="post" action="?tab=loans&amp;operation=overdue#overdue" class="desk-action-form">{% csrf_token %}<input type="hidden" name="action" value="reopen">{{ reopen_form.as_p }}<button type="submit">Kiểm tra và mở lại hồ sơ</button></form>{% else %}<p>Tài khoản chưa được cấp quyền thực hiện nghiệp vụ này.</p>{% endif %}</details></details>
+{% elif loan_operation == "notices" %}<details class="card review-disclosure" id="notices" {% if loan_operation == "notices" %}open{% endif %}><summary>Nhắc hạn</summary><div class="workspace-heading"><div class="workspace-symbol">♧</div><div><h2>Theo dõi nhắc hạn trả</h2><p class="muted">Thông báo được tạo trước hạn theo cấu hình, vào ngày đến hạn và mỗi 3 ngày quá hạn.</p></div></div>
+{% if perms.library.return_loan %}
+<form method="post" action="?tab=loans&amp;operation=notices#notices" class="desk-action-form">
+  {% csrf_token %}<input type="hidden" name="action" value="prepare_notices">
+  <button type="submit">Tạo thông báo hôm nay</button>
+  <p class="muted">Thông báo xuất hiện trong Cổng độc giả. Nút này không gửi email.</p>
+</form>
+{% endif %}
+
 <h3>Thông báo đã tạo</h3>
-<div class="table-wrap"><table class="list-table"><thead><tr><th>Tài liệu / độc giả</th><th>Loại nhắc</th><th>Ngày tạo</th><th>Gửi email</th></tr></thead><tbody>{% for notice in loan_notices %}<tr><td><a href="{% url 'library:staff_loan_detail' notice.loan_id %}">{{ notice.loan.copy.book.title }}</a><small>{{ notice.loan.reader.reader_number }}</small></td><td>{{ notice.get_kind_display }}</td><td>{{ notice.created_at|date:"d/m/Y H:i" }}</td><td>{% if notice.sent_at %}<span class="badge bg-teal-lt">Đã gửi</span>{% elif notice.last_error %}<span class="badge bg-orange-lt">Cần kiểm tra</span>{% else %}Chờ gửi{% endif %}</td></tr>{% empty %}<tr><td colspan="4" class="empty-state">Chưa có thông báo được tạo.</td></tr>{% endfor %}</tbody></table></div></section><section class="card desk-panel" data-desk-panel="reservations" id="reservations" {% if active_tab != 'reservations' %}hidden{% endif %}><div class="workspace-heading"><div class="workspace-symbol">▣</div><div><h2>Hàng chờ và giữ chỗ</h2><p class="muted">Theo dõi thứ tự nhận, bản đã phân bổ và thời hạn đến lấy sách.</p></div></div><div id="reservation-results">{% include "library/partials/reservation_rows.html" %}</div>{% if perms.library.manage_reservation %}<form method="post" data-async-expire>{% csrf_token %}<input type="hidden" name="action" value="expire"><button type="submit">Kiểm tra giữ chỗ hết hạn</button><p role="status" data-expire-status></p></form>{% endif %}</section><section class="card desk-panel" data-desk-panel="fines" id="fines" {% if active_tab != 'fines' %}hidden{% endif %}><div class="workspace-heading"><div class="workspace-symbol">₫</div><div><h2>Theo dõi và thu khoản phạt</h2><p class="muted">Chọn đúng khoản phải trả. Chỉ xác nhận khi đã nhận và đối soát tiền.</p></div></div><div class="fine-summary-list">{% for fine in unpaid_fines %}<div class="fine-entry"><a class="fine-summary-row" href="{% url 'library:staff_loan_detail' fine.loan_id %}"><div><strong>{{ fine.loan.copy.book.title }}</strong><small>Khoản #{{ fine.pk }} · {{ fine.loan.reader.reader_number }}</small></div><strong>{{ fine.balance }} ₫</strong></a>{% if perms.library.collect_finepayment and fine.balance > 0 %}<a class="btn btn-outline-primary" href="{% url 'library:payment_start' fine.pk %}">Ngân hàng / MoMo · thử</a>{% endif %}</div>{% empty %}<p class="empty-state">Không có khoản phạt đến hạn.</p>{% endfor %}</div>{% if perms.library.collect_finepayment %}<form method="post" class="desk-action-form">{% csrf_token %}<input type="hidden" name="action" value="payment">{{ payment_form.as_p }}<button type="submit">Ghi nhận đã thu tiền</button></form>{% else %}<p>Tài khoản chưa được cấp quyền thực hiện nghiệp vụ này.</p>{% endif %}</section></div>{% if desk_browser_enabled %}{% include "library/partials/desk_browser.html" %}{% endif %}</div></div>{% endblock %}
+<div class="table-wrap"><table class="list-table"><thead><tr><th>Tài liệu / độc giả</th><th>Loại nhắc</th><th>Ngày tạo</th><th>Gửi email</th></tr></thead><tbody>{% for notice in loan_notices %}<tr><td><a href="{% url 'library:staff_loan_detail' notice.loan_id %}">{{ notice.loan.copy.book.title }}</a><small>{{ notice.loan.reader.reader_number }}</small></td><td>{{ notice.get_kind_display }}</td><td>{{ notice.created_at|date:"d/m/Y H:i" }}</td><td>{% if notice.sent_at %}<span class="badge bg-teal-lt">Đã gửi</span>{% elif notice.last_error %}<span class="badge bg-orange-lt">Cần kiểm tra</span>{% else %}Chờ gửi{% endif %}</td></tr>{% empty %}<tr><td colspan="4" class="empty-state">Chưa có thông báo được tạo.</td></tr>{% endfor %}</tbody></table></div></details>
+{% elif loan_operation == "fines" %}<details class="card review-disclosure" id="fines" {% if loan_operation == "fines" %}open{% endif %}><summary>Khoản phạt</summary><div class="workspace-heading"><div class="workspace-symbol">₫</div><div><h2>Theo dõi và thu khoản phạt</h2><p class="muted">Chọn đúng khoản phải trả. Chỉ xác nhận khi đã nhận và đối soát tiền.</p></div></div><h3>Bồi thường mất / hỏng</h3>
+{% for case in damage_receivables %}
+  <article class="list-item">
+    <a href="{% url 'library:staff_loan_detail' case.loan_id %}">Hồ sơ #{{ case.pk }} · {{ case.loan.copy.book.title }}</a>
+    <p>{{ case.loan.reader.reader_number }} · Bồi thường {{ case.replacement_amount }} ₫ · Phí xử lý {{ case.processing_fee }} ₫</p>
+    <p>Tổng {{ case.compensation_total }} ₫</p>
+    {% if case.status == 'settled' %}
+      <p>Đã hoàn tất · {% if case.compensation_total %}Biên nhận BT-{{ case.pk }}{% else %}Không thu bồi thường{% endif %} · {{ case.settled_at|date:"d/m/Y H:i" }}</p>
+    {% else %}
+      <p>Chờ thu</p>
+      {% if perms.library.collect_finepayment and case.compensation_total %}
+        <details><summary>Thu tiền mặt</summary>
+          <form method="post" action="?tab=loans&amp;operation=fines#fines" class="desk-action-form">
+            {% csrf_token %}
+            <input type="hidden" name="action" value="settle_damage">
+            <input type="hidden" name="case_id" value="{{ case.pk }}">
+            <button type="submit">Xác nhận đã nhận đủ tiền mặt</button>
+          </form>
+        </details>
+        <form method="post" action="{% url 'library:damage_payment_start' case.pk %}">
+          {% csrf_token %}
+          <button type="submit" class="btn btn-outline-primary">Chuyển khoản qua VNPAY Sandbox</button>
+        </form>
+      {% endif %}
+    {% endif %}
+  </article>
+{% empty %}<p>Chưa có hồ sơ bồi thường đã duyệt mức tiền.</p>{% endfor %}
+<h3>Phạt quá hạn</h3>
+<p class="muted">Phiếu chuyển sang quá hạn ngay khi qua giờ trả. Tiền phạt tính theo ngày từ ngày sau hạn trả, theo lịch và mức phạt của phiếu.</p>
+{% if accruing_fines %}
+<h4>Đang phát sinh</h4>
+<ul>
+  {% for fine in accruing_fines %}
+    <li><a href="{% url 'library:staff_loan_detail' fine.loan_id %}">Phiếu #{{ fine.loan_id }} · {{ fine.loan.copy.book.title }}</a> · {{ fine.loan.reader.reader_number }} · {{ fine.balance }} ₫ ({{ fine.accrued_days }} ngày tính phạt)</li>
+  {% endfor %}
+</ul>
+{% endif %}
+<h4>Đến hạn thanh toán</h4>
+<div class="fine-summary-list">{% for fine in unpaid_fines %}<div class="fine-entry"><a class="fine-summary-row" href="{% url 'library:staff_loan_detail' fine.loan_id %}"><div><strong>{{ fine.loan.copy.book.title }}</strong><small>Khoản #{{ fine.pk }} · {{ fine.loan.reader.reader_number }}</small></div><strong>{{ fine.balance }} ₫</strong></a>{% if perms.library.collect_finepayment and fine.balance > 0 %}<a class="btn btn-outline-primary" href="{% url 'library:payment_start' fine.pk %}">Thanh toán thử Sandbox</a><a class="btn btn-primary" href="?tab=loans&amp;operation=fines&amp;loan_q=%23{{ fine.loan_id }}&amp;fine={{ fine.pk }}#fine-counter-form">Thu tại quầy</a>{% endif %}</div>{% empty %}<p class="empty-state">Không có khoản phạt đến hạn.</p>{% endfor %}</div>{% if perms.library.collect_finepayment %}<form method="post" action="?tab=loans&amp;operation=fines#fines" class="desk-action-form" id="fine-counter-form">{% csrf_token %}<input type="hidden" name="action" value="payment">{{ payment_form.as_p }}<button type="submit">Ghi nhận đã thu tiền</button></form>{% else %}<p>Tài khoản chưa được cấp quyền thực hiện nghiệp vụ này.</p>{% endif %}</details>{% endif %}
+{% include "library/partials/loan_rows.html" with rows=loans allow_return=True %}
+<nav class="desk-browser-pages" aria-label="Trang phiếu mượn">
+  {% if loans.has_previous %}<a href="{% querystring tab='loans' loan_page=loans.previous_page_number %}#open-loans">Trang trước</a>{% endif %}
+  <span>{{ loans.paginator.count }} phiếu · Trang {{ loans.number }}/{{ loans.paginator.num_pages }}</span>
+  {% if loans.has_next %}<a href="{% querystring tab='loans' loan_page=loans.next_page_number %}#open-loans">Trang sau</a>{% endif %}
+</nav></section>
+</div>{% elif active_tab == 'reservations' %}<section class="card desk-panel" data-desk-panel="reservations" id="reservations" {% if active_tab != 'reservations' %}hidden{% endif %}><div class="workspace-heading"><div class="workspace-symbol">▣</div><div><h2>Hàng chờ và giữ chỗ</h2><p class="muted">Theo dõi thứ tự nhận, bản đã phân bổ và thời hạn đến lấy sách.</p></div></div><div id="reservation-results">{% include "library/partials/reservation_rows.html" %}</div>{% if perms.library.manage_reservation %}<form method="post" data-async-expire>{% csrf_token %}<input type="hidden" name="action" value="expire"><button type="submit">Kiểm tra giữ chỗ hết hạn</button><p role="status" data-expire-status></p></form>{% endif %}</section>{% endif %}</div>{% if active_tab == 'checkout' and desk_browser_enabled %}{% include "library/partials/desk_browser.html" %}{% endif %}</div></div>{% endblock %}

@@ -7,6 +7,9 @@
   {% elif section == "reservation" %}
     {% if page.has_previous %}<a href="{% querystring reservation_page=page.previous_page_number %}">Trang trước</a>{% endif %}
     {% if page.has_next %}<a href="{% querystring reservation_page=page.next_page_number %}">Trang sau</a>{% endif %}
+  {% elif section == "compensation" %}
+    {% if page.has_previous %}<a href="{% querystring compensation_page=page.previous_page_number %}#reader-compensation">Trang trước</a>{% endif %}
+    {% if page.has_next %}<a href="{% querystring compensation_page=page.next_page_number %}#reader-compensation">Trang sau</a>{% endif %}
   {% else %}
     {% if page.has_previous %}<a href="{% querystring fine_page=page.previous_page_number %}">Trang trước</a>{% endif %}
     {% if page.has_next %}<a href="{% querystring fine_page=page.next_page_number %}">Trang sau</a>{% endif %}

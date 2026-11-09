@@ -31,7 +31,7 @@ class WorkspaceTests(CirculationFixtures, TestCase):
         response = circulation_desk(self.request("get", {"tab": "reservations"}))
         self.assertContains(response, 'data-circulation-menu')
         self.assertContains(response, 'data-desk-panel="reservations" id="reservations" >')
-        self.assertContains(response, 'data-desk-panel="checkout" id="checkout" hidden')
+        self.assertNotContains(response, 'data-desk-panel="checkout"')
         self.assertContains(response, 'data-async-expire')
         loan.refresh_from_db()
         self.assertEqual(loan.status, "open")

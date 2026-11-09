@@ -83,7 +83,7 @@ def issue_account_invitation(*, actor, request, username, email, first_name="", 
             reader_number=reader_number,
             reader_type=reader_type,
             valid_from=valid_from,
-            valid_until=valid_until,
+            valid_until=valid_until, requires_paid_plan=True,
             membership_verified=False,
         )
         profile.full_clean()
@@ -150,6 +150,8 @@ def accept_account_invitation(raw_token, password):
     if not invitation or invitation.accepted_at or invitation.revoked_at or invitation.expires_at <= timezone.now():
         raise ValidationError("Liên kết lời mời không hợp lệ hoặc đã hết hạn.")
     user = get_user_model().objects.select_for_update().get(pk=invitation.user_id)
+    if AccountSecurity.objects.filter(user=user, archived_was_active__isnull=False).exists():
+        raise ValidationError("Tài khoản đã được đưa vào mục Đã xóa.")
     if user.is_active or user.email.casefold() != invitation.invited_email.casefold():
         raise ValidationError("Lời mời không còn áp dụng cho tài khoản này.")
     from .models import ReaderRegistration
@@ -294,6 +296,8 @@ def set_account_active(*, subject, actor, is_active, reason=""):
         raise ValidationError("Chỉ một superuser khác mới được khóa tài khoản superuser.")
     security, _ = AccountSecurity.objects.get_or_create(user=subject)
     from .models import ReaderRegistration
+    if is_active and security.archived_was_active is not None:
+        raise ValidationError("Hãy khôi phục tài khoản từ mục Đã xóa trước.")
     if is_active and ReaderRegistration.objects.filter(user=subject).exclude(status="approved").exists():
         raise ValidationError("Hãy xử lý yêu cầu tại mục duyệt đăng ký độc giả trước.")
     if is_active and not security.email_is_verified:

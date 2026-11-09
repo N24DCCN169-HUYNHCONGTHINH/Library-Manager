@@ -130,6 +130,9 @@ def home(request):
 @never_cache
 @staff_mfa_required
 def staff_dashboard(request):
+    if request.user.has_perm("core.manage_system_operations") and request.GET.get("view") != "library":
+        from .operations_views import render_operations
+        return render_operations(request, dashboard=True)
     from .dashboard import dashboard_context
     return render(request, "core/staff_dashboard.html", dashboard_context(request.user, request.GET))
 
@@ -142,23 +145,25 @@ def reader_portal(request):
         profile = request.user.reader_profile
     except ObjectDoesNotExist:
         profile = None
-    loans = reservations = fines = []
+    loans = reservations = fines = compensation_cases = []
     loan_notifications = []
     summary = {}
     loan_status = request.GET.get("loan_status", "")
     if profile:
-        from apps.library.models import Fine, Loan, Reservation
+        from apps.library.models import DamageCase, Fine, Loan, Reservation
         from apps.library.models import LoanNotification
         loan_notifications = LoanNotification.objects.filter(loan__reader=profile, loan__status="open", due_at=F("loan__due_at")).select_related("loan__copy__book").defer('loan__copy__book__cover_image').order_by("-created_at")[:10]
         now = timezone.now()
         own_loans = Loan.objects.filter(reader=profile)
         own_reservations = Reservation.objects.filter(reader=profile)
-        own_fines = Fine.objects.filter(loan__reader=profile).select_related("loan__copy__book").defer('loan__copy__book__cover_image').order_by("-calculated_at", "-pk")
+        own_fines = Fine.objects.filter(loan__reader=profile).select_related("loan__copy__book", "loan__reader").prefetch_related("transactions").defer('loan__copy__book__cover_image').order_by("-calculated_at", "-pk")
         summary = {"open_loans": own_loans.filter(status=Loan.Status.OPEN).count(),
                    "overdue_loans": own_loans.filter(status=Loan.Status.OPEN, due_at__lt=now).count(),
                    "active_reservations": own_reservations.filter(status__in=["waiting", "ready"]).count(),
                    "balance": sum(fine.balance for fine in own_fines)}
-        if loan_status in Loan.Status.values:
+        if loan_status == "overdue":
+            own_loans = own_loans.filter(status=Loan.Status.OPEN, due_at__lt=now)
+        elif loan_status in Loan.Status.values:
             own_loans = own_loans.filter(status=loan_status)
         else:
             loan_status = ""
@@ -179,20 +184,29 @@ def reader_portal(request):
             else:
                 loan.can_request_renewal = loan.due_at >= now and loan.due_at - now <= timedelta(hours=48)
                 loan.renewal_message = "Có thể gửi yêu cầu; hệ thống sẽ kiểm tra lại tình trạng thẻ và điều kiện giao dịch."
-        reservations = Paginator(own_reservations.select_related("book", "copy__branch").defer('book__cover_image')
+        reservations = Paginator(own_reservations.select_related("book", "copy__branch", "pickup_branch").defer('book__cover_image')
                                  .order_by("-created_at", "-pk"), 20).get_page(request.GET.get("reservation_page"))
         for reservation in reservations:
             if reservation.status == Reservation.Status.WAITING:
-                reservation.queue_position = Reservation.objects.filter(
+                queue = Reservation.objects.filter(
                     book=reservation.book, status=Reservation.Status.WAITING,
                 ).filter(
                     Q(created_at__lt=reservation.created_at)
                     | Q(created_at=reservation.created_at, id__lte=reservation.id)
-                ).count()
+                )
+                if reservation.pickup_branch_id:
+                    queue = queue.filter(Q(pickup_branch__isnull=True) | Q(pickup_branch_id=reservation.pickup_branch_id))
+                reservation.queue_position = queue.count()
         fines = Paginator(own_fines, 20).get_page(request.GET.get("fine_page"))
+        own_compensation = DamageCase.objects.filter(loan__reader=profile)
+        compensation_cases = Paginator(
+            own_compensation.select_related("loan__copy__book").defer("loan__copy__book__cover_image")
+            .order_by("-reported_at", "-pk"), 20,
+        ).get_page(request.GET.get("compensation_page"))
+
     return render(request, "core/reader_portal.html", {"profile": profile, "today": timezone.localdate(),
         "loans": loans, "reservations": reservations, "fines": fines, "summary": summary,
-        "loan_status": loan_status, "loan_notifications": loan_notifications})
+        "loan_status": loan_status, "loan_notifications": loan_notifications, "compensation_cases": compensation_cases})
 
 
 @never_cache

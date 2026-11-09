@@ -166,13 +166,15 @@ def registration_review(request, registration_id):
                 if entry.status != ReaderRegistration.Status.PENDING:
                     raise ValidationError("Yêu cầu đã được xử lý, không thể duyệt lại.")
                 approved = form.cleaned_data["decision"] == "approve"
+                if approved and user.security_profile.archived_was_active is not None:
+                    raise ValidationError("Hãy khôi phục tài khoản từ mục Đã xóa trước.")
                 if approved and (not entry.email_verified_at or not user.security_profile.email_is_verified):
                     raise ValidationError("Độc giả cần xác minh email trước khi được duyệt.")
                 if user.is_active or user.is_staff or user.is_superuser or user.groups.exists():
                     raise ValidationError("Tài khoản đã thay đổi. Hãy kiểm tra trong quản lý tài khoản.")
                 if approved:
                     user.groups.add(Group.objects.get(name="reader"))
-                    ReaderProfile.objects.create(user=user, reader_number="R-"+secrets.token_hex(6).upper(), reader_type=form.cleaned_data["reader_type"], valid_from=timezone.localdate(), valid_until=form.cleaned_data["valid_until"], membership_verified=True, membership_verified_at=timezone.now(), membership_verified_by=request.user, verification_method="admin_registration")
+                    ReaderProfile.objects.create(user=user, reader_number="R-"+secrets.token_hex(6).upper(), reader_type=form.cleaned_data["reader_type"], valid_from=timezone.localdate(), valid_until=form.cleaned_data["valid_until"], membership_verified=True, membership_verified_at=timezone.now(), membership_verified_by=request.user, verification_method="admin_registration", requires_paid_plan=True)
                     user.is_active = True
                     user.save(update_fields=["is_active"])
                 entry.status = "approved" if approved else "rejected"

@@ -1,0 +1,86 @@
+{% extends "base.html" %}
+{% block title %}Gói thẻ thành viên · Library Hub{% endblock %}
+{% block content %}
+<div class="page-intro">
+  <div>
+    <span class="eyebrow">THẺ THƯ VIỆN</span>
+    <h1>Chọn gói thành viên</h1>
+    <p class="muted">Mọi gói có cùng quyền lợi mượn sách. Chọn thời hạn phù hợp với bạn.</p>
+  </div>
+  <a class="btn btn-outline-primary" href="{% url 'library:catalog' %}">Về danh mục sách</a>
+</div>
+
+{% if reader or guest or not can_purchase %}
+<section class="card personal-card">
+  {% if guest %}<p>Khách được chọn gói 1 ngày. Dùng cùng trình duyệt để theo dõi gói thẻ và yêu cầu mượn.</p>{% endif %}
+  {% if reader %}
+    <p>Mã bạn đọc để thanh toán tại quầy: <strong>{{ reader.reader_number }}</strong></p>
+    {% if reader.card_is_current %}<p>Thẻ có hiệu lực{% if reader.membership_expires_at %} đến {{ reader.membership_expires_at|date:"d/m/Y H:i" }}{% endif %}.</p>{% endif %}
+  {% endif %}
+  {% if pending %}
+    <p role="status">Yêu cầu #{{ pending.pk }} · {{ pending.amount }} ₫ · Chờ thanh toán tại quầy.</p>
+    <h2>Thanh toán thử VNPAY</h2>
+    <p>Sandbox dùng để kiểm tra giao dịch. Giao dịch thử không thu tiền và không kích hoạt thẻ.</p>
+    {% if sandbox_payment.successful %}
+      <p class="alert alert-success" role="status">VNPAY Sandbox đã xác nhận thành công · Mã giao dịch {{ sandbox_payment.provider_transaction }}.</p>
+    {% elif sandbox_enabled %}
+      {% if sandbox_payment.completed_at %}<p role="status">Giao dịch thử chưa thành công. Bạn có thể thử lại.</p>
+      {% elif sandbox_payment %}<p role="status">Đang chờ VNPAY Sandbox xác nhận. Tải lại trang để xem kết quả.</p>{% endif %}
+      <form method="post" action="{% url 'membership_sandbox_start' %}">{% csrf_token %}
+        <button type="submit" class="btn btn-outline-primary">Thanh toán thử VNPAY</button>
+      </form>
+    {% else %}
+      <p>VNPAY Sandbox chưa được cấu hình trên máy chủ.</p>
+    {% endif %}
+  {% endif %}
+  {% if not can_purchase %}
+    <p>Bạn đang xem bảng giá. Để mua gói, dùng tài khoản độc giả hoặc mở trang này ở cửa sổ riêng tư để đăng ký với tư cách khách.</p>
+    {% if perms.library.collect_finepayment and perms.core.view_readerprofile %}
+      <a class="btn btn-primary" href="{% url 'membership_queue' %}">Mở Thu phí gói thẻ</a>
+    {% endif %}
+  {% endif %}
+</section>
+{% endif %}
+
+{% if can_purchase %}
+<form id="membership-purchase" method="post">
+  {% csrf_token %}
+  {% if guest_form %}
+    <section class="card personal-card membership-guest-details">
+      <h2>Thông tin người mượn</h2>
+      <p>Điền đủ thông tin, sau đó bấm vào thẻ gói để gửi yêu cầu mua.</p>
+      {{ guest_form.non_field_errors }}
+      <div class="membership-guest-fields">
+        {% for field in guest_form %}<div>{{ field.label_tag }}{{ field }}{{ field.errors }}</div>{% endfor %}
+      </div>
+    </section>
+  {% endif %}
+</form>
+{% endif %}
+
+<section aria-label="Các gói thẻ thành viên">
+  <div class="membership-plan-grid">
+    {% for plan in plans %}
+      {% if can_purchase %}
+        <button type="submit" form="membership-purchase" name="plan" value="{{ plan.key }}" class="membership-plan membership-plan-button" aria-label="Chọn mua gói {{ plan.label }}, {{ plan.price }} đồng">
+      {% else %}
+        <article class="membership-plan">
+      {% endif %}
+        <span class="membership-plan-name">{{ plan.label }}</span>
+        <span class="membership-plan-price">{{ plan.price }} <span>₫</span></span>
+        <span class="membership-plan-description">{{ plan.description }}</span>
+        {% if can_purchase %}<span class="membership-plan-cta">Chọn mua gói <span aria-hidden="true">→</span></span>{% endif %}
+      {% if can_purchase %}</button>{% else %}</article>{% endif %}
+    {% endfor %}
+  </div>
+  <p class="muted membership-plan-note">Thẻ có hiệu lực sau khi quầy xác nhận đã nhận tiền.</p>
+</section>
+{% if guest and reader %}
+<section class="card personal-card">
+  <h2>Yêu cầu mượn và đặt trước của khách</h2>
+  <ul>{% for item in reservations %}
+    <li>{{ item.book.title }} · {{ item.get_status_display }}{% if item.pickup_branch %} · Cơ sở nhận: {{ item.pickup_branch.name }}{% endif %}{% if item.requested_duration_label %} · Muốn mượn {{ item.requested_duration_label }}{% endif %}{% if item.expires_at %} · Nhận trước {{ item.expires_at|date:"d/m/Y H:i" }}{% endif %}</li>
+  {% empty %}<li>Chưa có yêu cầu.</li>{% endfor %}</ul>
+</section>
+{% endif %}
+{% endblock %}

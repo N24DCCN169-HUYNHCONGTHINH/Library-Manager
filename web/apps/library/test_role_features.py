@@ -39,6 +39,43 @@ class RoleFeatureTests(TestCase):
                 self.assertEqual(response.status_code,200 if role in allowed else 302 if role=="reader" else 403,(role,name))
             if role in {"cataloger","system_admin"}:
                 self.assertEqual(self.client.post(reverse("library:circulation_desk"),{"action":"checkout","reader_number":self.profile_a.reader_number,"barcode":self.copy_a.barcode}).status_code,403)
+    def test_managed_password_reset_requires_reauthentication_and_forces_change(self):
+        self.login(self.system_admin)
+        url = reverse("account_reset_password", args=[self.reader_a.pk])
+        data = {
+            "current_password": "incorrect", "new_password1": "Temporary-74-Book!",
+            "new_password2": "Temporary-74-Book!", "reason": "Support request",
+        }
+        self.assertEqual(self.client.post(url, data).status_code, 200)
+        self.reader_a.refresh_from_db()
+        self.assertTrue(self.reader_a.check_password("Test-password-123!"))
+        data["current_password"] = "Test-password-123!"
+        self.assertRedirects(self.client.post(url, data), reverse("account_detail", args=[self.reader_a.pk]))
+        self.reader_a.refresh_from_db()
+        self.assertTrue(self.reader_a.check_password(data["new_password1"]))
+        self.assertTrue(self.reader_a.security_profile.must_change_password)
+        self.assertEqual(self.client.post(reverse("account_reset_password", args=[self.system_admin.pk]), data).status_code, 403)
+
+    def test_bulk_archive_and_restore_preserve_original_login_status(self):
+        self.reader_b.is_active = False
+        self.reader_b.save(update_fields=["is_active"])
+        self.login(self.system_admin)
+        url = reverse("account_bulk")
+        selected = [self.reader_a.pk, self.reader_b.pk]
+        response = self.client.post(url, {"action": "archive", "account_id": selected, "reason": "Test"})
+        self.assertRedirects(response, reverse("account_list"))
+        self.assertNotContains(self.client.get(reverse("account_list")), self.reader_a.username)
+        self.assertContains(self.client.get(reverse("account_list") + "?archived=1"), self.reader_a.username)
+        for reader in (self.reader_a, self.reader_b):
+            reader.refresh_from_db()
+            self.assertFalse(reader.is_active)
+        self.client.post(url, {"action": "restore", "account_id": selected, "reason": "Test"})
+        self.reader_a.refresh_from_db()
+        self.reader_b.refresh_from_db()
+        self.assertTrue(self.reader_a.is_active)
+        self.assertFalse(self.reader_b.is_active)
+        self.assertNotContains(self.client.get(reverse("account_list") + "?archived=1"), self.reader_a.username)
+
     def test_staff_mfa_cannot_be_skipped_for_exports_or_operations(self):
         self.login(self.cataloger,mfa=False)
         self.assertEqual(self.client.get(reverse("library:reports"),{"kind":"inventory","format":"xlsx"}).status_code,302)
@@ -147,6 +184,40 @@ class RoleFeatureTests(TestCase):
             self.assertEqual(self.client.get(url,data).json()["RspCode"],"00")
             self.assertEqual(self.client.get(url,data).json()["RspCode"],"02")
         order.refresh_from_db();self.assertEqual(order.state,"success");self.assertEqual(self.fine.balance,4000)
+
+    def test_librarian_can_open_vnpay_for_exact_compensation_total(self):
+        from unittest.mock import patch
+        from urllib.parse import parse_qs, urlsplit
+        from .models import DamageCase
+        from .payments import vnpay_signature
+
+        case = DamageCase.objects.create(
+            loan=self.loan_a, kind=DamageCase.Kind.MAJOR_DAMAGE, status=DamageCase.Status.APPROVED,
+            description="Test", replacement_amount=50000, processing_fee=2000, created_by=self.librarian,
+        )
+        start = reverse("library:damage_payment_start", args=[case.pk])
+        self.login(self.reader_b)
+        with patch("apps.library.payments.vnpay_keys", return_value=("TEST", "test-secret")):
+            self.assertEqual(self.client.post(start).status_code, 404)
+        self.login(self.librarian)
+        with patch("apps.library.payments.vnpay_keys", return_value=("TEST", "test-secret")):
+            response = self.client.post(start)
+            self.assertEqual(response.status_code, 302)
+            gateway = urlsplit(response["Location"])
+            self.assertEqual(gateway.hostname, "sandbox.vnpayment.vn")
+            params = parse_qs(gateway.query)
+            self.assertEqual(params["vnp_Amount"], ["5200000"])
+            order = PaymentOrder.objects.get(damage_case=case)
+            data = {
+                "vnp_TmnCode": "TEST", "vnp_TxnRef": order.pk.hex, "vnp_Amount": "5200000",
+                "vnp_OrderInfo": params["vnp_OrderInfo"][0], "vnp_ResponseCode": "00",
+                "vnp_TransactionStatus": "00", "vnp_TransactionNo": "456",
+            }
+            data["vnp_SecureHash"] = vnpay_signature(data, "test-secret")
+            self.assertEqual(self.client.get(reverse("library:vnpay_ipn"), data).json()["RspCode"], "00")
+        case.refresh_from_db()
+        self.assertEqual(case.status, DamageCase.Status.APPROVED)
+        self.assertIsNone(case.settled_at)
 
     def test_adjustment_requires_distinct_approval_and_preserves_original_amount(self):
         row=FineWaiverRequest.objects.create(fine=self.fine,kind="adjustment",requested_by=self.circulation,amount=500,reason="Bổ sung khoản tính thiếu có căn cứ")

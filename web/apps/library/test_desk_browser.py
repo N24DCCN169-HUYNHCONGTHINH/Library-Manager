@@ -1,7 +1,10 @@
+from datetime import timedelta
+
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import AnonymousUser, Group, Permission
 from django.test import RequestFactory, TestCase
 from django.urls import reverse
+from django.utils import timezone
 from .test_circulation import CirculationFixtures
 from .desk_browser import desk_browser, browser_context
 from .views import circulation_desk
@@ -64,7 +67,17 @@ class DeskBrowserTests(CirculationFixtures,TestCase):
         self.assertEqual(desk_browser(self.request({"desk_kind":"copies"})).status_code,200)
     def test_post_is_not_a_browse_action_and_main_workspace_contains_picker(self):
         self.assertEqual(desk_browser(self.request(method="post")).status_code,405)
-        response=circulation_desk(self.request({"tab":"return"}))
+        response=circulation_desk(self.request({"tab":"checkout"}))
         self.assertContains(response,'id="desk-browser"')
         self.assertContains(response,'name="desk_kind"')
-        self.assertContains(response,'value="loans" selected')
+        for tab in ("return", "loans", "renew", "damage", "overdue", "notices", "reservations", "fines"):
+            with self.subTest(tab=tab):
+                response = circulation_desk(self.request({"tab": tab}))
+                self.assertNotContains(response, 'id="desk-browser"')
+
+    def test_bell_counts_overdue_once_in_menu_and_in_total(self):
+        loan = checkout_copy("a", "COPY-1", self.staff)
+        Loan.objects.filter(pk=loan.pk).update(due_at=timezone.now() - timedelta(seconds=1))
+        response = circulation_desk(self.request({"tab": "loans", "operation": "overdue"}))
+        self.assertContains(response, 'aria-label="Theo dõi nghiệp vụ, tổng 2 mục"')
+        self.assertContains(response, 'operation=overdue#overdue">Quá hạn <span class="circulation-bell-count">1</span>', count=1)

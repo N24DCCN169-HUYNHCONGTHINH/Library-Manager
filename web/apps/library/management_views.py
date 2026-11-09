@@ -11,8 +11,8 @@ from django.views.decorators.http import require_POST
 from apps.core.views import staff_mfa_required
 from apps.core.models import AccountSecurityEvent
 from apps.core.lifecycle import record_security_event
-from .models import Book, BookCopy, CirculationPolicy, Fine, FinePayment, FineWaiverRequest, DamageCase
-from .services import CirculationError, circulation_write, record_fine_payment, approve_damage_case
+from .models import Book, BookCopy, CirculationPolicy, Fine, FinePayment, FineWaiverRequest, DamageCase, Loan, Reservation
+from .services import CirculationError, circulation_write, record_fine_payment, approve_damage_case, allocate_next_reservation
 
 class CopyForm(forms.ModelForm):
     class Meta:
@@ -49,6 +49,58 @@ def copies(request,book_id,copy_id=None):
                     messages.success(request,"Đã lưu bản sách.");return redirect("library:copies",book_id=book.pk)
     elif request.method=="POST" or edit: return HttpResponseForbidden()
     return render(request,"library/copies.html",{"book":book,"form":form,"editing":edit,"copies":book.copies.select_related("branch").all()})
+
+@circulation_write
+def change_copy_lifecycle(book_id, copy_id, actor, action, reason):
+    copy = get_object_or_404(BookCopy.objects.select_for_update(), pk=copy_id, book_id=book_id)
+    Book.objects.select_for_update().only("id").get(pk=book_id)
+    if not reason or len(reason) > 300:
+        raise CirculationError("Nhập lý do từ 1 đến 300 ký tự.")
+    if action not in {"found", "remove", "restore"}:
+        raise CirculationError("Thao tác không hợp lệ.")
+    if (copy.status in {BookCopy.Status.ON_LOAN, BookCopy.Status.ON_HOLD, BookCopy.Status.RETURN_PENDING}
+        or Loan.objects.filter(copy=copy, status=Loan.Status.OPEN).exists()
+        or Reservation.objects.filter(copy=copy, status=Reservation.Status.READY).exists()):
+        raise CirculationError("Bản sách đang có giao dịch mượn hoặc giữ chỗ. Hãy xử lý giao dịch trước.")
+    previous = {"status": copy.status, "is_active": copy.is_active}
+    if action == "found":
+        if not copy.is_active or copy.status != BookCopy.Status.LOST:
+            raise CirculationError("Chỉ ghi nhận tìm lại với bản đang sử dụng ở trạng thái Đã mất.")
+        copy.status = BookCopy.Status.AVAILABLE
+        copy.condition_note = reason
+        copy.save(update_fields=["status", "condition_note"])
+    else:
+        active = action == "restore"
+        if copy.is_active == active:
+            return copy
+        copy.is_active = active
+        copy.save(update_fields=["is_active"])
+    if copy.is_active and copy.status == BookCopy.Status.AVAILABLE:
+        allocate_next_reservation(copy, actor)
+        copy.refresh_from_db(fields=["status"])
+    record_security_event(
+        actor, AccountSecurityEvent.Kind.SYSTEM_OPERATION, actor,
+        {"copy": copy.pk, "book": book_id, "action": action, "before": previous,
+         "after": {"status": copy.status, "is_active": copy.is_active}}, reason=reason,
+    )
+    return copy
+
+
+@never_cache
+@staff_mfa_required
+@permission_required(("library.view_bookcopy", "library.manage_bookcopy"), raise_exception=True)
+@require_POST
+def copy_lifecycle(request, book_id, copy_id):
+    action = request.POST.get("action", "")
+    try:
+        copy = change_copy_lifecycle(book_id, copy_id, request.user, action, request.POST.get("reason", "").strip())
+    except CirculationError as exc:
+        messages.error(request, str(exc))
+    else:
+        labels = {"found": "Đã ghi nhận tìm lại", "remove": "Đã xóa khỏi kho lưu thông", "restore": "Đã khôi phục"}
+        messages.success(request, f"{labels[action]}: {copy.barcode}.")
+    return redirect("library:copies", book_id=book_id)
+
 
 @never_cache
 @staff_mfa_required

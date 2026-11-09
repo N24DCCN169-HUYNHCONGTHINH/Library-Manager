@@ -25,6 +25,12 @@ except admin.sites.NotRegistered:
 
 @admin.register(User)
 class AccountUserAdmin(UserAdmin):
+    def get_readonly_fields(self, request, obj=None):
+        fields = super().get_readonly_fields(request, obj)
+        if obj and AccountSecurity.objects.filter(user=obj, archived_was_active__isnull=False).exists():
+            return (*fields, "is_active")
+        return fields
+
     def save_model(self, request, obj, form, change):
         previous_active = None
         previous_roles = set()

@@ -1,0 +1,47 @@
+{% extends "base.html" %}
+{% block title %}Thu phí gói thẻ · Library Hub{% endblock %}
+{% block content %}
+<div class="page-intro"><div>
+  <h1>Thu phí gói thẻ</h1>
+  <p>Đối chiếu giấy tờ của khách và chỉ xác nhận sau khi đã nhận đủ tiền.</p>
+</div></div>
+<div class="reader-management-page">
+  <div class="reader-management-grid">
+    <section class="card reader-search-panel">
+      <h2>Tìm bạn đọc</h2>
+      <form method="get">
+        {% if request.GET.paid == '1' %}<input type="hidden" name="paid" value="1">{% endif %}
+        <label for="membership-query">Mã bạn đọc</label>
+        <input id="membership-query" name="q" type="search" value="{{ query }}" data-lookup="readers" data-lookup-mode="filter">
+        <button type="submit">Tìm</button>
+      </form>
+      {% if request.GET.paid == '1' %}
+        <p><a href="{% querystring paid=None page=None %}">Chỉ xem yêu cầu chờ thu</a></p>
+      {% else %}
+        <p><a href="{% querystring paid='1' page=None %}">Xem cả các khoản đã thu</a></p>
+      {% endif %}
+    </section>
+    <section class="card reader-results-panel">
+      <h2>Danh sách yêu cầu</h2>
+  <div class="table-wrap"><table class="list-table reader-results-table">
+    <thead><tr><th>Yêu cầu</th><th>Độc giả</th><th>Số tiền</th><th>Thao tác</th></tr></thead>
+    <tbody>{% for purchase in purchases %}
+      <tr>
+        <td>#{{ purchase.pk }} · {{ purchase.get_plan_display }}</td>
+        <td><a href="{% url 'reader_detail' purchase.reader_id %}">{{ purchase.reader.reader_number }} · {{ purchase.reader.user.get_full_name }}</a>{% if purchase.reader.is_guest %} · Khách{% endif %}</td>
+        <td>{{ purchase.amount }} ₫</td>
+        <td>{% if purchase.paid_at %}Biên nhận TV-{{ purchase.pk }}{% else %}
+          <form method="post" action="{% url 'membership_confirm' purchase.pk %}">{% csrf_token %}<button type="submit">Xác nhận đã thu tiền</button></form>
+        {% endif %}</td>
+      </tr>
+    {% empty %}<tr><td colspan="4">Không có yêu cầu phù hợp.</td></tr>{% endfor %}</tbody>
+  </table></div>
+  <nav aria-label="Phân trang yêu cầu">
+    {% if purchases.has_previous %}<a href="{% querystring page=purchases.previous_page_number %}">Trang trước</a>{% endif %}
+    {{ purchases.number }} / {{ purchases.paginator.num_pages }}
+    {% if purchases.has_next %}<a href="{% querystring page=purchases.next_page_number %}">Trang sau</a>{% endif %}
+  </nav>
+</section>
+  </div>
+</div>
+{% endblock %}

@@ -1,23 +1,23 @@
-/* Shared Library Hub glass system. Main surface opacity: .84 × .75 = .63. */
+/* Shared Library Hub glass system. Main surface opacity: .74. */
 :root{
-  --glass-surface:rgba(249,252,248,.63);
-  --glass-input:rgba(255,255,255,.57);
+  --glass-surface:rgba(249,252,248,.74);
+  --glass-input:rgba(255,255,255,.68);
   --glass-menu:rgba(249,252,248,.91);
   --glass-soft:rgba(235,246,239,.42);
   --glass-border:rgba(255,255,255,.72);
-  --glass-ink:#173632;
-  --glass-muted:#294a40;
+  --glass-ink:#000;
+  --glass-muted:#000;
   --glass-shadow:0 14px 40px rgba(9,32,28,.15),inset 0 1px rgba(255,255,255,.65);
   --glass-overlay:rgba(230,240,234,.36);
 }
 html[data-bs-theme=dark]{
-  --glass-surface:rgba(16,32,30,.63);
-  --glass-input:rgba(8,24,24,.5625);
+  --glass-surface:rgba(16,32,30,.74);
+  --glass-input:rgba(8,24,24,.68);
   --glass-menu:rgba(16,32,30,.91);
   --glass-soft:rgba(34,66,54,.42);
   --glass-border:rgba(173,220,204,.28);
-  --glass-ink:#e8f5ef;
-  --glass-muted:#c0d5ca;
+  --glass-ink:#fff;
+  --glass-muted:#fff;
   --glass-shadow:0 14px 40px rgba(0,12,12,.24),inset 0 1px rgba(208,255,234,.12);
   --glass-overlay:rgba(4,19,23,.42);
 }
@@ -54,7 +54,7 @@ html[data-bs-theme] body :is(input:not([type=hidden]):not([type=checkbox]):not([
   box-shadow:inset 0 1px 2px #103d2412,0 1px rgba(255,255,255,.18);border-radius:12px;
 }
 html[data-bs-theme] body :is(input,textarea)::placeholder{color:var(--glass-muted);opacity:.9}
-html[data-bs-theme] body select option{color:var(--glass-ink);background:var(--tblr-bg-surface,#f8fcf8)}
+html[data-bs-theme] body select option{color:var(--glass-ink);background:var(--glass-menu)}
 html[data-bs-theme] body :is(input,select,textarea,a,button,summary):focus-visible{outline:3px solid #27b3bd;outline-offset:3px}
 html[data-bs-theme] body :is(h1,h2,h3,h4,label,.card>p,.card li,.card legend,.setting-tile,.top-brand,.top-nav a){color:var(--glass-ink)}
 html[data-bs-theme] body :is(.muted,.text-secondary,.helptext,.personal-heading p,.page-intro p,.security-timeline small,.setting-tile small,.account-table small){color:var(--glass-muted)!important}
@@ -142,28 +142,18 @@ html[data-bs-theme] body .rail-group:has(.rail-circulation[open]){position:relat
 html[data-bs-theme] body :is(.card,.managed-book-card):has(.entity-suggestions:not([hidden])){position:relative;z-index:25;transform:none!important}
 html[data-bs-theme] body .text-danger{color:#a21e34!important}
 html[data-bs-theme=dark] body .text-danger{color:#ffadba!important}
-html[data-bs-theme] body :is(.errorlist,.alert-danger,[role=alert]){background:rgba(255,234,239,.95)!important;color:#8a1730!important}
-html[data-bs-theme] body :is(.errorlist,.alert-danger,[role=alert]) :is(li,p,strong,a){color:#8a1730!important}
-html[data-bs-theme=dark] body :is(.errorlist,.alert-danger,[role=alert]){background:rgba(80,24,39,.95)!important;color:#ffbeca!important}
-html[data-bs-theme=dark] body :is(.errorlist,.alert-danger,[role=alert]) :is(li,p,strong,a){color:#ffbeca!important}
 
 html[data-bs-theme] body :is(.circulation-flyout,.dropdown-panel) a{color:var(--glass-ink)!important}
 html[data-bs-theme] body .circulation-flyout a span{color:inherit!important}
-/* The oversized photograph moves independently from text and controls. */
+/* Keep the photo static so the glass surfaces do not re-render during navigation. */
 html[data-bs-theme] body{isolation:isolate;background-image:none!important}
-.library-backdrop{position:fixed;inset:0;z-index:-1;overflow:hidden;pointer-events:none;view-transition-name:library-backdrop}
-.library-backdrop:before{content:"";position:absolute;inset:-12%;background-image:var(--personal-wallpaper,url('images/canada-parliament-library.webp'));background-position:center;background-size:cover;background-repeat:no-repeat;transform:translate3d(var(--scene-to-x,0%),var(--scene-to-y,0%),0);animation:library-scene-a 1.8s cubic-bezier(.2,.65,.25,1) both}
+.library-backdrop{position:fixed;inset:0;z-index:-1;overflow:hidden;pointer-events:none}
+.library-backdrop:before{content:"";position:absolute;inset:0;background-image:var(--personal-wallpaper,url('images/canada-parliament-library.webp'));background-position:center;background-size:cover;background-repeat:no-repeat}
 .library-backdrop:after{content:"";position:absolute;inset:0;background:var(--glass-overlay)}
-html[data-scene-run=b] .library-backdrop:before{animation-name:library-scene-b}
-@keyframes library-scene-a{from{transform:translate3d(var(--scene-from-x,0%),var(--scene-from-y,0%),0)}to{transform:translate3d(var(--scene-to-x,0%),var(--scene-to-y,0%),0)}}
-@keyframes library-scene-b{from{transform:translate3d(var(--scene-from-x,0%),var(--scene-from-y,0%),0)}to{transform:translate3d(var(--scene-to-x,0%),var(--scene-to-y,0%),0)}}
-::view-transition-old(library-backdrop),::view-transition-new(library-backdrop){animation-duration:.7s}
-@media(prefers-reduced-motion:reduce){.library-backdrop:before{animation:none!important;transform:none!important}::view-transition-old(library-backdrop),::view-transition-new(library-backdrop){animation:none!important}}
 @media print{.library-backdrop{display:none!important}}
 
 /* Persistent chrome is kept out of the page-content transition. */
-:root{--glass-ink:#102e27;--glass-muted:#203e34;--nav-direction:1;--chrome-offset:86px}
-html[data-bs-theme=dark]{--glass-ink:#f2fff8;--glass-muted:#d2e8dc}
+:root{--nav-direction:1;--chrome-offset:86px}
 html[data-bs-theme] body{font-weight:500}
 html[data-bs-theme] body .app-sidebar{position:fixed;inset:0 auto 0 0;height:100dvh;width:88px;z-index:90;view-transition-name:library-rail}
 html[data-bs-theme] body .app-main{margin-left:88px;padding-top:var(--chrome-offset);min-width:0}
@@ -213,8 +203,8 @@ html{scroll-padding-top:calc(var(--chrome-offset) + 16px)}
 ::view-transition-group(library-rail){z-index:100}::view-transition-group(library-topbar){z-index:90}::view-transition-group(library-content){z-index:2}::view-transition-group(library-backdrop){z-index:0}
 
 /* Selected/hovered surfaces always carry their own contrasting foreground. */
-:root{--selection-bg:rgba(198,231,214,.94);--selection-ink:#103e2d;--selection-line:#11785b}
-html[data-bs-theme=dark]{--selection-bg:rgba(39,102,76,.96);--selection-ink:#f0fff6;--selection-line:#80e3bc}
+:root{--selection-bg:rgba(198,231,214,.94);--selection-ink:#000;--selection-line:#11785b}
+html[data-bs-theme=dark]{--selection-bg:rgba(39,102,76,.96);--selection-ink:#fff;--selection-line:#80e3bc}
 html[data-bs-theme] body :is(.circulation-flyout a,.dropdown-panel a,.entity-option,.staff-feature-nav a,.section-links a):is(:hover,:focus-visible,[aria-current],[aria-selected=true]){
  background:var(--selection-bg)!important;color:var(--selection-ink)!important;border-color:var(--selection-line)!important;
 }
@@ -224,3 +214,134 @@ html[data-bs-theme] body :is(.top-nav a,.desk-tabs a):is(:hover,:focus-visible,[
 html[data-bs-theme] body .view-switch button[aria-pressed=true],html[data-bs-theme] body .theme-switch button[aria-pressed=true]{background:var(--selection-bg)!important;color:var(--selection-ink)!important;border-color:var(--selection-line)!important}
 html[data-bs-theme] body :is(.circulation-flyout .flyout-heading,.workspace-heading h2,.page-intro h1,.personal-heading h1){color:var(--glass-ink)!important}
 html[data-bs-theme=dark] body :is(.circulation-flyout .flyout-heading,.workspace-heading p,.workspace-heading small){color:var(--glass-muted)!important}
+
+/* The loan operation rows need a denser surface over the photo. */
+html[data-bs-theme] body [data-desk-panel="loans"] > .card.review-disclosure {
+  background: var(--glass-hover-surface) !important;
+}
+
+.loan-status-open{--loan-state-bg:#fde68a;--loan-state-ink:#000}
+.loan-status-returned{--loan-state-bg:#bbf7d0;--loan-state-ink:#000}
+.loan-status-damaged{--loan-state-bg:#e9d5ff;--loan-state-ink:#000}
+.loan-status-reminder{--loan-state-bg:#fed7aa;--loan-state-ink:#000}
+.loan-status-overdue{--loan-state-bg:#fecaca;--loan-state-ink:#000}
+.loan-status-lost{--loan-state-bg:#475569;--loan-state-ink:#fff}
+
+html[data-bs-theme] body [data-desk-panel="loans"] a.loan-action-color {
+  background: var(--loan-state-bg) !important;
+  color: var(--loan-state-ink) !important;
+  border-color: var(--loan-state-ink);
+}
+
+html[data-bs-theme] body .desk-tabs.loan-management-tabs > a.loan-action-color {
+  --selection-bg: var(--loan-state-bg);
+  --selection-ink: var(--loan-state-ink);
+  background: var(--loan-state-bg) !important;
+  color: var(--loan-state-ink) !important;
+}
+
+html[data-bs-theme] body .loan-management-tabs > a.loan-action-color[aria-current="page"] {
+  box-shadow: inset 0 -3px var(--loan-state-ink);
+}
+
+html[data-bs-theme] body .list-table .loan-status-badge {
+  background: var(--loan-state-bg) !important;
+  color: var(--loan-state-ink) !important;
+}
+
+.loan-status-blue { --loan-state-bg: #bfdbfe; --loan-state-ink: #000; }
+html[data-bs-theme] body .reader-history-charts .reader-chart-label {
+  background: var(--loan-state-bg);
+  color: var(--loan-state-ink);
+  justify-self: start;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+.reader-history-chart-row meter::-webkit-meter-bar {
+  background: var(--glass-soft, #e5e7eb);
+  border: 1px solid var(--glass-border, #dce9e2);
+}
+.reader-history-chart-row meter::-webkit-meter-optimum-value {
+  background: var(--loan-state-bg, #14876a);
+}
+.reader-history-chart-row meter::-moz-meter-bar {
+  background: var(--loan-state-bg, #14876a);
+}
+
+/* Foreground follows the surface, including controls and status chips. */
+@media screen {
+  html[data-bs-theme] body {
+    --tblr-body-color: var(--glass-ink);
+    --tblr-secondary-color: var(--glass-ink);
+    --tblr-link-color: var(--glass-ink);
+    --tblr-link-hover-color: var(--glass-ink);
+  }
+
+  html[data-bs-theme] body :is(h1,h2,h3,h4,h5,h6,p,dt,dd,li,label,legend,summary,small,.eyebrow,.muted,.text-secondary,.text-danger,.helptext) {
+    color: var(--glass-ink);
+  }
+
+  html[data-bs-theme] body a:not(.btn):not(.badge):not(.rail-link):not(.loan-action-color) {
+    color: var(--glass-ink);
+  }
+
+  html[data-bs-theme] body :is(.text-danger,.text-secondary,.text-muted,.helptext,.eyebrow) {
+    color: var(--glass-ink) !important;
+  }
+
+  html[data-bs-theme] body :is(.btn-outline-primary,.btn-outline-secondary) {
+    color: var(--glass-ink);
+  }
+  html[data-bs-theme] body :is(.btn-outline-primary,.btn-outline-secondary):hover {
+    color: #fff;
+  }
+
+  html[data-bs-theme] body :is(.badge,.avatar):is(.bg-orange-lt,.bg-red-lt,.bg-blue-lt,.bg-purple-lt) {
+    color: #000 !important;
+  }
+  html[data-bs-theme=light] body :is(.badge,.avatar):is(.bg-teal-lt,.bg-green-lt,.bg-yellow-lt,.bg-secondary-lt) {
+    color: #000 !important;
+  }
+  html[data-bs-theme=dark] body :is(.badge,.avatar):is(.bg-teal-lt,.bg-green-lt,.bg-yellow-lt,.bg-secondary-lt) {
+    color: #fff !important;
+  }
+}
+
+html[data-bs-theme] body .reader-history-chart-row strong {
+  color: inherit !important;
+}
+
+/* Message surfaces set their own foreground instead of inheriting card text. */
+html[data-bs-theme] body {
+  --notice-success: #e8f7f3;
+  --notice-info: #eaf3ff;
+  --notice-warning: #fff2cf;
+  --notice-error: #ffecef;
+}
+html[data-bs-theme=dark] body {
+  --notice-success: #183d33;
+  --notice-info: #1e354f;
+  --notice-warning: #493718;
+  --notice-error: #501827;
+}
+html[data-bs-theme] body :is([role=status], .alert) {
+  background: var(--notice-info) !important;
+  color: var(--glass-ink) !important;
+  border-inline-start: 3px solid #5694cf;
+}
+html[data-bs-theme] body .alert-success {
+  background: var(--notice-success) !important;
+  border-inline-start-color: #219e80;
+}
+html[data-bs-theme] body .alert-warning {
+  background: var(--notice-warning) !important;
+  border-inline-start-color: #d99420;
+}
+html[data-bs-theme] body :is(.errorlist, [role=alert], .alert-danger) {
+  background: var(--notice-error) !important;
+  color: var(--glass-ink) !important;
+  border-inline-start-color: #c52237;
+}
+html[data-bs-theme] body :is(.alert, .errorlist, [role=alert], [role=status]) :is(p, li, strong, small, a:not(.btn)) {
+  color: inherit !important;
+}

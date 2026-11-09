@@ -7,7 +7,7 @@
   const kind=form.elements.desk_kind,query=form.elements.desk_q,filter=panel.querySelector('.desk-browser-filter');
   let pending,timer,serial=0;
   const selection={};
-  const updateFilter=()=>{filter.hidden=kind.value!=='copies';};
+  const updateFilter=()=>{filter.hidden=kind.value!=='copies';query.dataset.lookup=kind.value;};
   updateFilter();
   const load=async(page=1)=>{
     clearTimeout(timer);pending?.abort();pending=new AbortController();const current=++serial;
@@ -27,6 +27,7 @@
   form.addEventListener('submit',event=>{event.preventDefault();load();});
   kind.addEventListener('change',()=>{query.value='';updateFilter();load();});
   form.elements.desk_status.addEventListener('change',()=>load());
+  query.addEventListener('change',()=>load());
   query.addEventListener('input',()=>{clearTimeout(timer);pending?.abort();serial++;results.inert=true;timer=setTimeout(()=>load(),280);});
   panel.addEventListener('click',event=>{
     const page=event.target.closest('[data-desk-browser-page]');
@@ -36,17 +37,18 @@
     const fill=(id)=>{const input=document.getElementById(id);if(!input)return;input.value=code;input.dispatchEvent(new Event('change',{bubbles:true}));input.focus({preventScroll:true});input.scrollIntoView({block:'nearest',behavior:matchMedia('(prefers-reduced-motion: reduce)').matches?'auto':'smooth'});};
     if(button.dataset.deskPick==='reader'){
       selection.reader=label+' · '+code;
-      if(desk.dataset.activeTab==='return'){
-        const input=document.getElementById('checkout_reader_number');if(input)input.value=code;
-        if([...kind.options].some(option=>option.value==='loans')){kind.value='loans';query.value=code;updateFilter();load();}
-      } else {
-        if (desk.dataset.activeTab !== 'checkout') desk.querySelector('.desk-tabs a[data-desk-tab="checkout"]').click();
-        fill('checkout_reader_number');
-      }
+      fill('checkout_reader_number');
     }else{
       const target=button.dataset.deskPick;
-      if(!['checkout','return'].includes(target))return;
-      if(desk.dataset.activeTab!==target)desk.querySelector('.desk-tabs a[data-desk-tab="'+target+'"]').click();
+      if(target==='return'){
+        const url=new URL(form.action);
+        url.searchParams.set('tab','loans');
+        url.searchParams.set('barcode',code);
+        url.hash='return';
+        location.assign(url);
+        return;
+      }
+      if(target!=='checkout')return;
       fill(target+'_barcode');selection.book=label+' · '+code;
     }
     panel.querySelector('[data-desk-selected]').textContent=Object.values(selection).join(' | ')+' — Chưa ghi giao dịch.';

@@ -1,9 +1,18 @@
 {% extends "base.html" %}
 {% block title %}Cổng độc giả · Quản lý thư viện{% endblock %}
 {% block content %}
-<div class="page-intro"><div><div class="eyebrow">THƯ VIỆN CỦA BẠN</div><h1>Cổng độc giả</h1><p class="muted">Theo dõi hành trình đọc và quản lý các yêu cầu của bạn.</p></div></div>{% if profile %}<div class="stat-grid"><div class="card stat">Sách đang mượn<strong>{{ summary.open_loans }}</strong></div><div class="card stat">Lượt quá hạn<strong class="text-danger">{{ summary.overdue_loans }}</strong></div><div class="card stat">Đặt trước đang hoạt động<strong>{{ summary.active_reservations }}</strong></div><div class="card stat">Khoản còn phải trả<strong>{{ summary.balance }} ₫</strong></div></div>{% endif %}<section class="card">
+<div class="page-intro"><div><div class="eyebrow">THƯ VIỆN CỦA BẠN</div><h1>Cổng độc giả</h1><p class="muted">Theo dõi hành trình đọc và quản lý các yêu cầu của bạn.</p></div></div>
+<nav aria-label="Mượn và trả sách" class="desk-tabs">
+  <a href="{% url 'library:catalog' %}">Tìm sách để mượn</a>
+  {% if profile %}
+    <a href="{% url 'membership_plans' %}">Gói thẻ thành viên</a>
+    <a href="#reader-loans">Xem sách và hạn trả</a>
+    <a href="#reader-reservations">Theo dõi yêu cầu mượn</a>
+  {% endif %}
+</nav>
+{% if profile %}<div class="stat-grid"><div class="card stat">Sách đang mượn<strong>{{ summary.open_loans }}</strong></div><div class="card stat">Lượt quá hạn<strong class="text-danger">{{ summary.overdue_loans }}</strong></div><div class="card stat">Đặt trước đang hoạt động<strong>{{ summary.active_reservations }}</strong></div><div class="card stat">Khoản còn phải trả<strong>{{ summary.balance }} ₫</strong></div></div>{% endif %}<section class="card">
   <h2>Thông tin thẻ bạn đọc</h2>
-  {% if loan_notifications %}<aside aria-label="Nhắc hạn sách"><h3>Nhắc hạn gần đây</h3>{% for notice in loan_notifications %}<p><strong>{{ notice.get_kind_display }}</strong> · {{ notice.loan.copy.book.title }} · hạn {{ notice.due_at|date:"d/m/Y H:i" }}{% if notice.last_error %} · Email chưa gửi được; thông tin vẫn hiển thị tại đây.{% endif %}</p>{% endfor %}</aside>{% endif %}
+  <div id="reader-reminders">{% if loan_notifications %}<aside aria-label="Nhắc hạn sách"><h3>Nhắc hạn gần đây</h3>{% for notice in loan_notifications %}<p><strong>{{ notice.get_kind_display }}</strong> · {{ notice.loan.copy.book.title }} · hạn {{ notice.due_at|date:"d/m/Y H:i" }}{% if notice.last_error %} · Email chưa gửi được; thông tin vẫn hiển thị tại đây.{% endif %}</p>{% endfor %}</aside>{% elif profile %}<p>Chưa có thông báo nhắc hạn. Xem hạn trả trong <a href="#reader-loans">Sách đã mượn và hạn trả</a>.</p>{% endif %}</div>
   {% for message in messages %}<p role="status">{{ message }}</p>{% endfor %}
   {% if profile %}
     <p>Tài khoản: {{ user.username }} · {{ user.get_full_name }} · {{ user.email }}</p>
@@ -24,14 +33,15 @@
   <p><a href="{% url 'email_change_request' %}">Đổi email</a> · <a href="{% url 'password_change' %}">Đổi mật khẩu</a></p>
 </section>
 <section class="card">
-  <h2>Lượt mượn</h2>
+  <h2 id="reader-loans">Sách đã mượn và hạn trả</h2>
+  <p>Mang sách đến quầy để trả. Sau khi thủ thư xác nhận, phiếu sẽ hiển thị trạng thái “Đã trả”.</p>
   <form method="get"><label for="loan_status">Trạng thái lượt mượn</label>
-    <select id="loan_status" name="loan_status"><option value="">Tất cả</option><option value="open"{% if loan_status == "open" %} selected{% endif %}>Đang mượn</option><option value="returned"{% if loan_status == "returned" %} selected{% endif %}>Đã trả</option><option value="lost"{% if loan_status == "lost" %} selected{% endif %}>Đã báo mất</option></select><button type="submit">Lọc lịch sử</button>
+    <select id="loan_status" name="loan_status"><option value="">Tất cả</option><option value="open"{% if loan_status == "open" %} selected{% endif %}>Đang mượn</option><option value="overdue"{% if loan_status == "overdue" %} selected{% endif %}>Quá hạn</option><option value="returned"{% if loan_status == "returned" %} selected{% endif %}>Đã trả</option><option value="lost"{% if loan_status == "lost" %} selected{% endif %}>Đã báo mất</option></select><button type="submit">Lọc lịch sử</button>
   </form>
   {% for loan in loans %}
     <article class="list-item"><a href="{% url 'reader_loan_detail' loan.pk %}"><strong>{{ loan.copy.book.title }}</strong></a> · {{ loan.copy.barcode }}<br>
       {% if loan.copy.branch %}Cơ sở: {{ loan.copy.branch.name }}{% if loan.copy.shelf_location %} · Kệ {{ loan.copy.shelf_location }}{% endif %}<br>{% endif %}
-      Trạng thái: {{ loan.get_status_display }} · Hạn trả: {{ loan.due_at|date:"d/m/Y H:i" }}<br>
+      Trạng thái: {{ loan.get_status_display }} · Hạn trả: {{ loan.due_at|date:"d/m/Y H:i:s" }}<br>
       {% if loan.is_overdue %}<strong>Đã quá hạn — vui lòng liên hệ quầy để trả sách.</strong><br>{% endif %}
       {% if loan.status == "open" %}<span>{{ loan.renewal_message }}</span>{% if loan.can_request_renewal %}<form method="post" action="{% url 'library:renew' loan.id %}">{% csrf_token %}<button type="submit">Gửi yêu cầu gia hạn</button></form>{% endif %}{% endif %}
     </article>
@@ -39,8 +49,8 @@
   {% include "core/reader_pagination.html" with page=loans section="loan" %}
 </section>
 <section class="card">
-  <h2>Đặt trước</h2>
-  {% for reservation in reservations %}<p>{{ reservation.book.title }} · {{ reservation.get_status_display }}{% if reservation.status == "waiting" %} · Vị trí hiện tại trong hàng chờ: {{ reservation.queue_position }}{% endif %}{% if reservation.expires_at %} · Hạn nhận {{ reservation.expires_at|date:"d/m/Y H:i" }}{% endif %}
+  <h2 id="reader-reservations">Yêu cầu mượn và đặt trước</h2>
+  {% for reservation in reservations %}<p>{{ reservation.book.title }} · {{ reservation.get_status_display }}{% if reservation.pickup_branch %} · Cơ sở nhận: {{ reservation.pickup_branch.name }}{% endif %}{% if reservation.requested_duration_label %} · Muốn mượn {{ reservation.requested_duration_label }}{% endif %}{% if reservation.status == "waiting" %} · Vị trí hiện tại trong hàng chờ: {{ reservation.queue_position }}{% endif %}{% if reservation.expires_at %} · Hạn nhận {{ reservation.expires_at|date:"d/m/Y H:i" }}{% endif %}
     {% if reservation.status == "ready" %}<strong>Sách đã sẵn sàng nhận tại quầy{% if reservation.copy.branch %} · {{ reservation.copy.branch.name }}{% endif %}.</strong>{% endif %}
     {% if reservation.status == "waiting" or reservation.status == "ready" %}<form method="post" action="{% url 'library:cancel_reservation' reservation.id %}">{% csrf_token %}<button type="submit">Hủy yêu cầu</button></form>{% endif %}
     {% if reservation.close_reason %}<span>{{ reservation.close_reason }}</span>{% endif %}
@@ -48,9 +58,36 @@
   {% include "core/reader_pagination.html" with page=reservations section="reservation" %}
 </section>
 <section class="card">
-  <h2>Khoản phạt</h2>
-  {% for fine in fines %}<p><a href="{% url 'reader_loan_detail' fine.loan_id %}">{{ fine.loan.copy.book.title }}</a> · phát sinh {{ fine.accrued_amount }} ₫ · còn phải trả {{ fine.balance }} ₫ · {{ fine.get_status_display }} · tính đến {{ fine.calculated_at|date:"d/m/Y H:i" }}{% if fine.balance > 0 %} · <a href="{% url 'library:payment_start' fine.pk %}">Thanh toán thử qua ngân hàng / MoMo</a>{% endif %}</p>{% empty %}<p>Chưa ghi nhận khoản phạt.</p>{% endfor %}
+  <h2 id="reader-fines">Khoản phạt và bồi thường</h2>
+  <h3>Phạt quá hạn</h3>
+  {% for fine in fines %}
+    <article class="list-item">
+      <p><a href="{% url 'reader_loan_detail' fine.loan_id %}">{{ fine.loan.copy.book.title }}</a> · Phát sinh {{ fine.accrued_amount }} ₫ · Còn phải trả {{ fine.balance }} ₫ · {{ fine.get_status_display }} · Tính đến {{ fine.calculated_at|date:"d/m/Y H:i" }}</p>
+      {% if fine.balance > 0 %}
+        <a class="btn btn-sm btn-outline-primary" href="{% url 'library:payment_start' fine.pk %}">Thanh toán thử Sandbox</a>
+        {% include "library/partials/fine_counter_payment.html" %}
+      {% endif %}
+    </article>
+  {% empty %}<p>Chưa ghi nhận khoản phạt.</p>{% endfor %}
   {% include "core/reader_pagination.html" with page=fines section="fine" %}
+  <h3 id="reader-compensation">Bồi thường mất / hỏng</h3>
+  {% for case in compensation_cases %}
+    <article class="list-item">
+      <strong>Hồ sơ #{{ case.pk }} · {{ case.loan.copy.book.title }}</strong>
+      <p>{{ case.get_kind_display }} · {{ case.get_status_display }}</p>
+      {% if case.status == 'approved' and case.replacement_amount != None or case.status == 'settled' and case.replacement_amount != None %}
+        <p>Bồi thường {{ case.replacement_amount }} ₫ · Phí xử lý {{ case.processing_fee }} ₫ · <strong>Tổng {{ case.compensation_total }} ₫</strong></p>
+        {% if case.status == 'approved' and case.compensation_total %}<p>Chờ thu tại quầy.</p>
+          <form method="post" action="{% url 'library:damage_payment_start' case.pk %}">
+            {% csrf_token %}
+            <button type="submit" class="btn btn-outline-primary">Thanh toán thử VNPAY Sandbox</button>
+          </form>{% endif %}
+        {% if case.status == 'settled' and case.compensation_total and case.settled_at %}<p>Biên nhận BT-{{ case.pk }} · {{ case.settled_at|date:"d/m/Y H:i" }}</p>{% endif %}
+      {% endif %}
+    </article>
+  {% empty %}<p>Chưa có hồ sơ mất / hỏng.</p>{% endfor %}
+  {% include "core/reader_pagination.html" with page=compensation_cases section="compensation" %}
+
 </section>
 {% endif %}
 {% endblock %}

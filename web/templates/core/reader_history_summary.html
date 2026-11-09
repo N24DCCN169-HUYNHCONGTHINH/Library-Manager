@@ -1,0 +1,42 @@
+<div class="reader-history-charts">
+  <section class="reader-profile-group">
+    <h3>{% if history_date_filtered %}Lượt mượn theo tháng{% else %}Lượt mượn trong 6 tháng gần nhất{% endif %}</h3>
+    {% for label, count in history_monthly %}
+      <div class="reader-history-chart-row"><span>{{ label }} · <strong>{{ count }}</strong></span><meter min="0" max="{{ history_monthly_max }}" value="{{ count }}" aria-label="{{ label }}, {{ count }} lượt"></meter></div>
+    {% empty %}<p>Chưa có lượt mượn trong khoảng đã chọn.</p>{% endfor %}
+  </section>
+  <section class="reader-profile-group">
+    <h3>Loại tài liệu đã mượn</h3>
+    {% for label, count, color in history_materials %}
+      <div class="reader-history-chart-row loan-status-{{ color }}"><span class="badge loan-status-badge reader-chart-label">{{ label }} · <strong>{{ count }}</strong></span><meter min="0" max="{{ history_materials_max }}" value="{{ count }}" aria-label="{{ label }}, {{ count }} lượt"></meter></div>
+    {% empty %}<p>Chưa có lượt mượn.</p>{% endfor %}
+  </section>
+  <section class="reader-profile-group">
+    <h3>Kết quả trả sách</h3>
+    {% for label, count, color in history_outcomes %}
+      <div class="reader-history-chart-row loan-status-{{ color }}"><span class="badge loan-status-badge reader-chart-label">{{ label }} · <strong>{{ count }}</strong></span><meter min="0" max="{{ history_outcomes_max }}" value="{{ count }}" aria-label="{{ label }}, {{ count }} phiếu"></meter></div>
+    {% endfor %}
+  </section>
+</div>
+{% if history_restrictions %}
+  <h3>Hạn chế mượn của độc giả</h3>
+  <div class="table-wrap"><table class="list-table">
+    <thead><tr><th>Thời điểm</th><th>Hạn chế</th><th>Kết quả</th></tr></thead>
+    <tbody>
+      {% for row in history_restrictions %}
+        <tr>
+          <td>{{ row.created_at|date:"d/m/Y H:i" }}</td>
+          <td>{{ row.get_kind_display }}<small>{{ row.reason }}</small></td>
+          <td>{% if row.resolved_at %}<span class="badge loan-status-badge loan-status-returned">Đã giải quyết</span><small>{{ row.resolved_at|date:"d/m/Y H:i" }} · {{ row.resolution }}</small>{% else %}<span class="badge loan-status-badge loan-status-overdue">Đang áp dụng</span>{% endif %}</td>
+        </tr>
+      {% endfor %}
+    </tbody>
+  </table></div>
+  {% if history_restrictions.has_other_pages %}
+    <nav class="desk-browser-pages" aria-label="Trang hạn chế mượn">
+      {% if history_restrictions.has_previous %}<a href="{% querystring restriction_page=history_restrictions.previous_page_number %}#reader-history">Trang trước</a>{% endif %}
+      <span>Trang {{ history_restrictions.number }}/{{ history_restrictions.paginator.num_pages }}</span>
+      {% if history_restrictions.has_next %}<a href="{% querystring restriction_page=history_restrictions.next_page_number %}#reader-history">Trang sau</a>{% endif %}
+    </nav>
+  {% endif %}
+{% endif %}
